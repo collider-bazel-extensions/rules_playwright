@@ -197,7 +197,7 @@ load("@rules_playwright//:defs.bzl", "playwright_server")
 
 playwright_server(
     name = "browsers",
-    port = 0,  # 0 = let itest pick
+    data = ["//:node_modules/@playwright/test"],
 )
 ```
 
@@ -206,12 +206,19 @@ Long-running `npx playwright run-server`. Drops directly into
 Use this when you want a single browser daemon shared across multiple tests
 in a service group.
 
+The listen port is taken (in priority order) from `$PORT` at runtime, then
+the build-time `port` attr. Setting `$PORT` lets the rule compose with
+`itest_service.autoassign_port` — see the
+[`rules_itest` integration](#rules_itest-integration) example.
+
 **Attributes:**
 
 | Attribute | Type | Default | Description |
 |---|---|---|---|
 | `name` | `string` | required | Target name. |
-| `port` | `int` | `0` | TCP port. `0` = let `rules_itest` allocate. |
+| `port` | `int` | `0` | Build-time default port; `0` lets Playwright pick. Overridden at runtime by `$PORT` if set (e.g. via `itest_service.env = {"PORT": port(":svc")}`). |
+| `data` | `label_list` | `[]` | Extra runfiles. **Must include `node_modules/@playwright/test`.** |
+| `browsers` | `string_list` | `["chromium"]` | Browser bundles to assemble in runfiles. v0.1 supports `"chromium"` only. |
 
 ---
 
@@ -243,16 +250,31 @@ reachable, non-zero otherwise. `rules_itest` retries until success or timeout.
 ```python
 load("@rules_playwright//:defs.bzl", "playwright_binary")
 
-playwright_binary(name = "playwright")
+playwright_binary(
+    name = "playwright",
+    data = ["//:node_modules/@playwright/test"],
+)
 ```
 
-`bazel run //path:playwright -- <args>` invokes `npx playwright <args>` with
-the toolchain-resolved browser path injected. Useful for ad-hoc operations:
+`bazel run //path:playwright -- <args>` invokes `node @playwright/test/cli.js <args>`.
+Useful for ad-hoc operations:
 
 ```
 bazel run //tools:playwright -- show-trace path/to/trace.zip
 bazel run //tools:playwright -- codegen http://localhost:8080
 ```
+
+Browser bundles are deliberately *not* attached — most ad-hoc invocations
+(`show-trace`, `codegen` against arbitrary URLs, `--help`) don't need them.
+Targets that *do* need a hermetic browser should use `playwright_test` or
+`playwright_server` instead.
+
+**Attributes:**
+
+| Attribute | Type | Default | Description |
+|---|---|---|---|
+| `name` | `string` | required | Target name. |
+| `data` | `label_list` | `[]` | Extra runfiles. **Must include `node_modules/@playwright/test`.** |
 
 ---
 
@@ -275,17 +297,19 @@ bazel_dep(name = "rules_itest", version = "0.0.21")
 
 ```python
 load("@rules_playwright//:defs.bzl", "playwright_test")
-load("@rules_itest//:itest.bzl", "itest_service", "service_test")
+load("@rules_itest//:itest.bzl", "itest_service", "port", "service_test")
 
-# Long-running fake app under test (any executable that opens a port).
+# Long-running app under test. itest assigns a free port via autoassign_port
+# and exports it to the service via env interpolation.
 itest_service(
     name = "app",
     exe = "//myapp:server_bin",
     autoassign_port = True,
+    env = {"PORT": port(":app")},
     health_check = "//myapp:server_health",
 )
 
-# The Playwright test itself, marked manual so it only runs via service_test.
+# The Playwright test target itself; `manual` so only `service_test` runs it.
 playwright_test(
     name = "ui_test_bin",
     srcs = ["ui.spec.ts"],
@@ -294,15 +318,53 @@ playwright_test(
     tags = ["manual"],
 )
 
+# Compose: itest brings :app up, gates on its health_check, then exports
+# `PORT_app` into the test process's env. The test's playwright.config.ts
+# reads `process.env.PORT_app` to construct `baseURL`.
 service_test(
     name = "ui_test",
     services = [":app"],
+    env = {"PORT_app": port(":app")},
     test = ":ui_test_bin",
 )
 ```
 
-`rules_itest` populates `BASE_URL` (or whatever env var your config reads) from
-the service's allocated port before invoking `playwright_test`.
+Env injection is **not automatic** — `service_test(env = {...})` is the
+explicit hook. The matching playwright.config.ts:
+
+```typescript
+import { defineConfig } from "@playwright/test";
+const port = process.env.PORT_app;
+if (!port) throw new Error("PORT_app not set — is this running under service_test?");
+export default defineConfig({
+  use: { baseURL: `http://127.0.0.1:${port}` },
+  // …
+});
+```
+
+### Example: Playwright server as a long-running browser daemon
+
+```python
+load("@rules_playwright//:defs.bzl", "playwright_server")
+load("@rules_itest//:itest.bzl", "itest_service", "port")
+
+playwright_server(
+    name = "browsers",
+    data = ["//:node_modules/@playwright/test"],
+)
+
+# The launcher reads $PORT at runtime and binds it. itest's autoassign_port
+# fills $PORT in via the env interpolation below.
+itest_service(
+    name = "browsers_svc",
+    exe = ":browsers",
+    autoassign_port = True,
+    env = {"PORT": port(":browsers_svc")},
+)
+```
+
+Tests that depend on `:browsers_svc` get a hermetic Playwright WS endpoint at
+`ws://127.0.0.1:$${//path/to:browsers_svc}/`.
 
 ---
 
@@ -367,14 +429,20 @@ ingress and port-forward shim.
 | `node` | `File` or `None` | Bundled node binary if any (`None` in v0.1) |
 | `runfiles` | `depset[File]` | All files required at runtime |
 
-### `PlaywrightBrowserInfo`
+### `PlaywrightBundleInfo`
+
+A single Playwright cache bundle (e.g. `chromium-1148`, `chromium_headless_shell-1148`,
+`ffmpeg-1011`). One bundle == one directory under `PLAYWRIGHT_BROWSERS_PATH`.
+The `chromium` browser type is delivered as multiple bundles — see
+`BROWSER_TYPE_BUNDLES` in `private/versions.bzl`.
 
 | Field | Type | Description |
 |---|---|---|
-| `channel` | `string` | `chromium` (v0.1) |
-| `executable` | `File` | The browser binary inside the bundle |
-| `runfiles` | `depset[File]` | All files in the browser bundle (resources, libs, .pak files) |
-| `env` | `dict[str,str]` | Channel-specific env vars to set before launch (currently empty) |
+| `name` | `string` | Bundle name as Playwright knows it (e.g. `"chromium"`, `"chromium_headless_shell"`) |
+| `revision` | `string` | Revision string (e.g. `"1148"`) |
+| `dir_name` | `string` | `"<name>-<revision>"` — the directory name Playwright expects under `PLAYWRIGHT_BROWSERS_PATH` |
+| `files` | `depset[File]` | Every file inside the bundle dir (libs, resources, the binary itself) |
+| `root` | `File` | A marker file at the bundle dir's root, used to derive runfiles short_path |
 
 ---
 
