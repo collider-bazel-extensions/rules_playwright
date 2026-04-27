@@ -170,7 +170,16 @@ def main(argv: list[str]) -> int:
             cmd += ["--config", staged_config]
         cmd += staged_specs
     elif args.mode == "server":
-        cmd = [node, cli_js, "run-server", "--port", str(args.port)]
+        # $PORT (set by `itest_service.env = {"PORT": port(...)}`) wins over the
+        # build-time `port` attr so the rule composes with rules_itest's
+        # autoassign_port. Without an env override, fall through to the
+        # build-time default for `bazel run :server` ergonomics.
+        port = env.get("PORT")
+        try:
+            port_i = int(port) if port else args.port
+        except ValueError:
+            port_i = args.port
+        cmd = [node, cli_js, "run-server", "--port", str(port_i)]
     else:  # binary
         # argparse.REMAINDER captures the literal `--` separator (used in
         # binary.sh.tmpl to keep argparse from consuming the user's own

@@ -6,6 +6,7 @@ package.json + pnpm-lock.yaml). No host `npm install` required.
 """
 
 load("@bazel_skylib//lib:unittest.bzl", "analysistest", "asserts")
+load("@rules_itest//:itest.bzl", "itest_service", "port", "service_test")
 load("@rules_playwright//:defs.bzl", "playwright_binary", "playwright_health_check", "playwright_server", "playwright_test")
 load("@rules_python//python:defs.bzl", "py_test")
 load("@rules_shell//shell:sh_test.bzl", "sh_test")
@@ -22,6 +23,7 @@ playwright_binary(
 playwright_server(
     name = "server",
     port = 0,
+    data = ["//:node_modules/@playwright/test"],
     tags = ["manual"],
 )
 
@@ -62,4 +64,31 @@ sh_test(
     srcs = ["binary_runtime_test.sh"],
     args = ["$(rootpath :binary)", "1.49.0"],
     data = [":binary"],
+)
+
+# ---- playwright_server runtime: itest_service composition --------------------
+# Wraps :server in itest_service with autoassign_port so itest picks a free
+# port and exports it via $PORT. The launcher prefers $PORT over the
+# build-time `port` attr — exercises that path. The service_test then runs
+# server_runtime_test.sh which probes the assigned port.
+
+itest_service(
+    name = "pw_test_server_svc",
+    exe = ":server",
+    autoassign_port = True,
+    env = {"PORT": port(":pw_test_server_svc")},
+    tags = ["manual"],
+)
+
+sh_test(
+    name = "server_runtime_test_bin",
+    srcs = ["server_runtime_test.sh"],
+    tags = ["manual"],
+)
+
+service_test(
+    name = "server_runtime_test",
+    services = [":pw_test_server_svc"],
+    env = {"PORT": port(":pw_test_server_svc")},
+    test = ":server_runtime_test_bin",
 )
