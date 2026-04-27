@@ -1,0 +1,5 @@
+# pnpm 10+ configuration consumed by aspect_rules_js's npm_translate_lock.
+# We deliberately do NOT run @playwright/test's postinstall (it would try to
+# download browsers into ~/.cache/ms-playwright). Browsers are supplied by
+# the rules_playwright toolchain at test time, with PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1.
+onlyBuiltDependencies: []

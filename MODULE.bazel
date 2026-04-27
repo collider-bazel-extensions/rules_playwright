@@ -1,0 +1,48 @@
+"""rules_playwright — hermetic Playwright UI tests for Bazel."""
+
+module(
+    name = "rules_playwright",
+    version = "0.1.0",
+    compatibility_level = 0,
+)
+
+bazel_dep(name = "bazel_skylib", version = "1.5.0")
+bazel_dep(name = "platforms", version = "0.0.9")
+bazel_dep(name = "rules_python", version = "0.31.0")
+
+playwright = use_extension("//:extensions.bzl", "playwright")
+
+# Download mode: Bazel fetches the upstream Playwright CLI + browser bundles.
+playwright.version(
+    name = "playwright",
+    version = "1.49.0",
+)
+
+# System mode: symlink a host-installed `npx playwright` and use whatever
+# browsers it has cached. Sacrifices hermeticity, gains setup speed.
+# playwright.system(name = "playwright_host")
+
+use_repo(playwright, "playwright")
+
+register_toolchains("@playwright//:all")
+
+# ---- dev-only: aspect_rules_js for the in-tree smoke test -------------------
+# Consumers of rules_playwright do NOT inherit this — it is dev_dependency-only
+# and used only to wire `@playwright/test` into //tests:smoke_test. Consumers
+# can use rules_js the same way (see README), or any other approach that lands
+# `node_modules/@playwright/test` in their test target's runfiles.
+bazel_dep(name = "aspect_rules_js", version = "3.0.3", dev_dependency = True)
+bazel_dep(name = "rules_nodejs", version = "6.7.4", dev_dependency = True)
+bazel_dep(name = "rules_itest", version = "0.0.52", dev_dependency = True)
+bazel_dep(name = "rules_shell", version = "0.8.0", dev_dependency = True)
+
+node = use_extension("@rules_nodejs//nodejs:extensions.bzl", "node", dev_dependency = True)
+node.toolchain(node_version = "22.9.0")
+
+npm = use_extension("@aspect_rules_js//npm:extensions.bzl", "npm", dev_dependency = True)
+npm.npm_translate_lock(
+    name = "npm",
+    pnpm_lock = "//:pnpm-lock.yaml",
+    verify_node_modules_ignored = "//:.bazelignore",
+)
+use_repo(npm, "npm")

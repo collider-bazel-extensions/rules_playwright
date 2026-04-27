@@ -1,0 +1,18 @@
+"""Smallest possible playwright_test. No services, no network — just a data: URL.
+
+Demonstrates Option A from the README: @playwright/test supplied via
+aspect_rules_js's `npm_link_all_packages`. The workspace root's
+`package.json` and `pnpm-lock.yaml` pin the runner.
+"""
+
+load("@rules_playwright//:defs.bzl", "playwright_test")
+
+playwright_test(
+    name = "smoke_test",
+    srcs = ["smoke.spec.ts"],
+    config = "playwright.config.ts",
+    # Override the default `requires-network` since this test never touches
+    # the network. Default `no-sandbox` and `playwright` tags are preserved.
+    tags = ["playwright", "no-sandbox"],
+    data = ["//:node_modules/@playwright/test"],
+)

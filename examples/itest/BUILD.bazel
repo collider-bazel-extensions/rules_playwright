@@ -1,0 +1,51 @@
+"""playwright_test driving a fake HTTP service via rules_itest.
+
+Compose: itest_service (the app) -> service_test (Playwright test that
+depends on the service). itest allocates a port, exports it via env, and
+guarantees the service is healthy before the test runs.
+"""
+
+load("@rules_playwright//:defs.bzl", "playwright_test")
+load("@rules_itest//:itest.bzl", "itest_service", "port", "service_test")
+load("@rules_shell//shell:sh_binary.bzl", "sh_binary")
+
+# The "app under test" — any executable that opens a port. Here we use a
+# trivial python http.server as a stand-in. In your repo replace with your
+# real app's binary target.
+sh_binary(
+    name = "fake_app",
+    srcs = ["fake_app.sh"],
+)
+
+itest_service(
+    name = "app",
+    exe = ":fake_app",
+    autoassign_port = True,
+    # rules_itest doesn't auto-export $PORT to the service — interpolate
+    # the assigned port into the service's env (or args).
+    env = {"PORT": port(":app")},
+    # so_reuseport_aware would let itest hold the socket while the service
+    # takes over via SO_REUSEPORT; Python's http.server doesn't set that
+    # flag, so we let itest release the port first and live with the
+    # tiny race window. Real apps that already use SO_REUSEPORT should
+    # pass `so_reuseport_aware = True` here.
+)
+
+# The actual Playwright test target. `manual` so it only runs via service_test
+# (which sets PORT_app — required by playwright.config.ts).
+playwright_test(
+    name = "ui_test_bin",
+    srcs = ["ui.spec.ts"],
+    config = "playwright.config.ts",
+    tags = ["manual"],
+    data = ["//:node_modules/@playwright/test"],
+)
+
+# Pass the assigned port through to the test as PORT_app — the config
+# above reads process.env.PORT_app.
+service_test(
+    name = "ui_test",
+    services = [":app"],
+    env = {"PORT_app": port(":app")},
+    test = ":ui_test_bin",
+)

@@ -1,0 +1,64 @@
+"""playwright_test driving an app deployed into a rules_kind cluster.
+
+Service stack:
+  cluster      (kind_cluster)             -- brings up a kind cluster
+   └─ deploy   (sh_binary -> kubectl)     -- applies app manifests
+       └─ ui_test (playwright_test)       -- runs against port-forwarded service
+
+itest brings each service up in order, gates on health, then runs the test.
+
+NOTE: This example is **not loadable from this repo** — it loads
+`@rules_kind//`, which is a sibling extension that lives outside Bazel
+Central Registry. To run it, copy the files into your own workspace that
+already has `bazel_dep(name = "rules_kind", ...)`. Requires Docker + kind
+installed on the host.
+"""
+
+load("@rules_playwright//:defs.bzl", "playwright_test")
+load("@rules_kind//:defs.bzl", "kind_cluster", "kind_health_check")
+load("@rules_itest//:itest.bzl", "itest_service", "service_test")
+
+kind_cluster(
+    name = "cluster",
+    config = "kind-config.yaml",
+)
+
+kind_health_check(
+    name = "cluster_health",
+    cluster = ":cluster",
+)
+
+itest_service(
+    name = "k8s",
+    exe = ":cluster",
+    health_check = ":cluster_health",
+)
+
+# Deploy the app + open a port-forward. The shim below does both and stays
+# alive so itest treats it as a long-running service. Health is "kubectl get
+# deployment myapp -o jsonpath='{.status.readyReplicas}'" returning >0.
+sh_binary(name = "deploy_app", srcs = ["deploy_app.sh"], data = ["app.yaml"])
+
+sh_binary(name = "deploy_health", srcs = ["deploy_health.sh"])
+
+itest_service(
+    name = "app",
+    exe = ":deploy_app",
+    deps = [":k8s"],
+    health_check = ":deploy_health",
+    autoassign_port = True,  # port-forward listens on $PORT
+)
+
+playwright_test(
+    name = "e2e_bin",
+    srcs = ["e2e.spec.ts"],
+    config = "playwright.config.ts",
+    tags = ["manual"],
+    data = ["//:node_modules/@playwright/test"],
+)
+
+service_test(
+    name = "e2e",
+    services = [":app"],
+    test = ":e2e_bin",
+)

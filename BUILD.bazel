@@ -1,0 +1,41 @@
+load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
+load("@npm//:defs.bzl", "npm_link_all_packages")
+
+package(default_visibility = ["//visibility:public"])
+
+exports_files([
+    "MODULE.bazel",
+    "WORKSPACE",
+    "defs.bzl",
+    "extensions.bzl",
+    "repositories.bzl",
+])
+
+# Dev-only: links @npm//... into //:node_modules/* so //tests:smoke_test can
+# pass //:node_modules/@playwright/test via `data`. Not part of the rule
+# library's public surface; safe to ignore for consumers.
+npm_link_all_packages(name = "node_modules")
+
+bzl_library(
+    name = "defs",
+    srcs = ["defs.bzl"],
+    deps = [
+        "//private:playwright_binary",
+        "//private:playwright_health_check",
+        "//private:playwright_server",
+        "//private:playwright_test",
+        "//private:providers",
+    ],
+)
+
+bzl_library(
+    name = "extensions",
+    srcs = ["extensions.bzl"],
+    deps = ["//private:repositories"],
+)
+
+bzl_library(
+    name = "repositories",
+    srcs = ["repositories.bzl"],
+    deps = ["//private:repositories"],
+)

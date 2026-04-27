@@ -1,0 +1,27 @@
+load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
+load("@rules_python//python:defs.bzl", "py_binary")
+
+package(default_visibility = ["//visibility:public"])
+
+exports_files([
+    "launcher.py",
+    "launcher.sh.tmpl",
+    "server.sh.tmpl",
+    "binary.sh.tmpl",
+    "health_check.sh.tmpl",
+])
+
+py_binary(
+    name = "launcher",
+    srcs = ["launcher.py"],
+    main = "launcher.py",
+)
+
+bzl_library(name = "providers", srcs = ["providers.bzl"])
+bzl_library(name = "versions", srcs = ["versions.bzl"])
+bzl_library(name = "bundle_assembly", srcs = ["bundle_assembly.bzl"], deps = [":providers", ":versions"])
+bzl_library(name = "playwright_binary", srcs = ["playwright_binary.bzl"])
+bzl_library(name = "playwright_test", srcs = ["playwright_test.bzl"], deps = [":bundle_assembly"])
+bzl_library(name = "playwright_server", srcs = ["playwright_server.bzl"], deps = [":bundle_assembly"])
+bzl_library(name = "playwright_health_check", srcs = ["playwright_health_check.bzl"])
+bzl_library(name = "repositories", srcs = ["repositories.bzl"], deps = [":versions"])

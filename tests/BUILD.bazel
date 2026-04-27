@@ -1,0 +1,42 @@
+"""Smoke + analysis tests. Per the rules_pg/temporal/kind convention, examples
+also live here — but full runnable compositions are under /examples.
+
+@playwright/test is supplied via aspect_rules_js (see MODULE.bazel + workspace
+package.json + pnpm-lock.yaml). No host `npm install` required.
+"""
+
+load("@bazel_skylib//lib:unittest.bzl", "analysistest", "asserts")
+load("@rules_playwright//:defs.bzl", "playwright_binary", "playwright_health_check", "playwright_server", "playwright_test")
+load(":analysis_tests.bzl", "playwright_server_test_suite", "playwright_test_test_suite")
+
+# ---- compile-time smoke: rules instantiate cleanly --------------------------
+
+playwright_binary(
+    name = "binary",
+    tags = ["manual"],
+)
+
+playwright_server(
+    name = "server",
+    port = 0,
+    tags = ["manual"],
+)
+
+playwright_health_check(
+    name = "server_health",
+    endpoint_env = "PLAYWRIGHT_SERVER_URL",
+    tags = ["manual"],
+)
+
+playwright_test(
+    name = "smoke_test",
+    srcs = ["smoke.spec.ts"],
+    config = "playwright.config.ts",
+    browsers = ["chromium"],
+    data = ["//:node_modules/@playwright/test"],
+)
+
+# ---- analysis tests (no execution required) ---------------------------------
+
+playwright_test_test_suite(name = "playwright_test_analysis")
+playwright_server_test_suite(name = "playwright_server_analysis")

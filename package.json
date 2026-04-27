@@ -1,0 +1,7 @@
+{
+  "name": "rules_playwright",
+  "private": true,
+  "devDependencies": {
+    "@playwright/test": "1.49.0"
+  }
+}

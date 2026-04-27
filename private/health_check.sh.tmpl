@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# Probes the Playwright server's WS endpoint. Used as itest health_check.
+set -euo pipefail
+
+URL="${{ENDPOINT_VAR}:-ws://127.0.0.1:0}"
+
+# Drop ws:// prefix; nc the host:port for a TCP-level liveness check.
+hostport="${URL#ws://}"
+hostport="${hostport#wss://}"
+hostport="${hostport%%/*}"
+
+if command -v nc >/dev/null 2>&1; then
+  exec nc -z "${hostport%:*}" "${hostport##*:}"
+fi
+exec bash -c "</dev/tcp/${hostport%:*}/${hostport##*:}"

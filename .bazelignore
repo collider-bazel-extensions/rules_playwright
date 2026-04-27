@@ -1,0 +1,3 @@
+node_modules
+# rules_kind is not in BCR; the example is documentation-only.
+examples/kind
