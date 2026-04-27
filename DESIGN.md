@@ -39,7 +39,7 @@ majority. Anything Playwright-specific is flagged.
 | Hub + per-bundle child repos with real `download_and_extract` | wired |
 | Pinned chromium + chromium_headless_shell 1.49.0 sha256s for linux_amd64, darwin_amd64, darwin_arm64 | wired |
 | `tools/update_checksums.py` (fetches browsers.json, sha256s, regenerates manifest) — dogfooded, regenerates bit-identical | wired |
-| `playwright_test`, `_server`, `_binary`, `_health_check` rules | `_test` runtime-validated; `_server` / `_binary` / `_health_check` analysis-only |
+| `playwright_test`, `_server`, `_binary`, `_health_check` rules | `_test` and `_binary` runtime-validated; `_server` and `_health_check` analysis-only — runtime testing is blocked on refactoring `playwright_server` to take its port via runtime env (currently a build-time int attr that doesn't compose with `itest_service.autoassign_port`). v0.1.x follow-up. |
 | `launcher.py` (env, exec, SIGTERM forwarding, hardlink-stage spec dir, browsers-path) | wired |
 | Analysis tests + version drift guard | wired |
 | Real `tests/smoke.spec.ts` + `playwright.config.ts` | wired |

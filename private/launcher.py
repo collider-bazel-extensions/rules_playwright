@@ -172,7 +172,13 @@ def main(argv: list[str]) -> int:
     elif args.mode == "server":
         cmd = [node, cli_js, "run-server", "--port", str(args.port)]
     else:  # binary
-        cmd = [node, cli_js] + (args.forward or [])
+        # argparse.REMAINDER captures the literal `--` separator (used in
+        # binary.sh.tmpl to keep argparse from consuming the user's own
+        # flags); drop it before forwarding to Playwright.
+        forward = args.forward or []
+        if forward and forward[0] == "--":
+            forward = forward[1:]
+        cmd = [node, cli_js] + forward
 
     proc = subprocess.Popen(cmd, env=env)
 

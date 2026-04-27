@@ -1,0 +1,49 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  linux:
+    name: bazel test (ubuntu-latest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install host prereqs
+        # rules_itest builds a small C sentinel (`exit0`) that needs g++/libstdc++-dev
+        # because Bazel's default cc toolchain links libstdc++ even for pure-C binaries.
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y --no-install-recommends g++ libstdc++-12-dev
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install pnpm
+        run: corepack enable pnpm
+
+      - uses: bazel-contrib/setup-bazel@0.15.0
+        with:
+          bazelisk-cache: true
+          disk-cache: ${{ github.workflow }}
+          repository-cache: true
+
+      - name: Install npm deps
+        run: pnpm install --frozen-lockfile
+
+      - name: bazel test //...
+        run: bazel test //... --test_tag_filters=-manual --test_output=errors
+
+      - name: Upload test logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bazel-testlogs
+          path: bazel-testlogs/
+          if-no-files-found: ignore
