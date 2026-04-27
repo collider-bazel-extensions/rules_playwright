@@ -7,6 +7,7 @@ package.json + pnpm-lock.yaml). No host `npm install` required.
 
 load("@bazel_skylib//lib:unittest.bzl", "analysistest", "asserts")
 load("@rules_playwright//:defs.bzl", "playwright_binary", "playwright_health_check", "playwright_server", "playwright_test")
+load("@rules_python//python:defs.bzl", "py_test")
 load(":analysis_tests.bzl", "playwright_server_test_suite", "playwright_test_test_suite")
 
 # ---- compile-time smoke: rules instantiate cleanly --------------------------
@@ -40,3 +41,14 @@ playwright_test(
 
 playwright_test_test_suite(name = "playwright_test_analysis")
 playwright_server_test_suite(name = "playwright_server_analysis")
+
+# ---- drift guard ------------------------------------------------------------
+
+py_test(
+    name = "version_drift_test",
+    srcs = ["version_drift_test.py"],
+    data = [
+        "//:pnpm-lock.yaml",
+        "//private:versions.bzl",
+    ],
+)

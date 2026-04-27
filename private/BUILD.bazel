@@ -9,6 +9,7 @@ exports_files([
     "server.sh.tmpl",
     "binary.sh.tmpl",
     "health_check.sh.tmpl",
+    "versions.bzl",
 ])
 
 py_binary(

@@ -9,6 +9,7 @@ exports_files([
     "defs.bzl",
     "extensions.bzl",
     "repositories.bzl",
+    "pnpm-lock.yaml",
 ])
 
 # Dev-only: links @npm//... into //:node_modules/* so //tests:smoke_test can

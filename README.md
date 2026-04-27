@@ -8,7 +8,9 @@ end-to-end tests and with
 [`rules_kind`](https://github.com/collider-bazel-extensions/rules_kind) for
 in-cluster smokes.
 
-**Supported platforms:** Linux (x86\_64), macOS (arm64, x86\_64)
+**Supported platforms (v0.1):** Linux (x86\_64). macOS (arm64, x86\_64) bundles
+are pinned but **validation is pending** — see
+[Contributing → Help wanted: macOS validation](#help-wanted-macos-validation).
 **Supported Playwright versions:** 1.49
 **Supported browsers (v0.1):** Chromium
 
@@ -21,9 +23,7 @@ in-cluster smokes.
 
 ## Contents
 
-- [Installation](#installation)
-  - [Bzlmod (MODULE.bazel)](#bzlmod-modulebazel)
-  - [Legacy WORKSPACE](#legacy-workspace)
+- [Installation](#installation) (Bzlmod-only)
 - [Quickstart](#quickstart)
 - [Rules](#rules)
   - [playwright\_test](#playwright_test)
@@ -38,7 +38,7 @@ in-cluster smokes.
 - [Toolchain integration](#toolchain-integration)
 - [Examples](#examples)
 - [FAQ](#faq)
-- [Maintainers](#maintainers)
+- [Contributing](#contributing)
 
 ---
 
@@ -64,22 +64,8 @@ use_repo(playwright, "playwright")
 
 ### Legacy WORKSPACE
 
-```python
-load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
-
-http_archive(
-    name = "rules_playwright",
-    urls = ["https://github.com/collider-bazel-extensions/rules_playwright/archive/v0.1.0.tar.gz"],
-    sha256 = "...",
-    strip_prefix = "rules_playwright-0.1.0",
-)
-
-load("@rules_playwright//:repositories.bzl",
-     "rules_playwright_dependencies", "register_playwright_toolchains")
-
-rules_playwright_dependencies()
-register_playwright_toolchains(versions = ["1.49.0"])
-```
+`rules_playwright` is **Bzlmod-only** in v0.1. The `WORKSPACE` mode is not
+supported — `repositories.bzl` does not export top-level setup macros.
 
 ---
 
@@ -559,8 +545,70 @@ Host system libraries aren't vendored — see
 
 ---
 
-## Maintainers
+## Contributing
 
-PRs welcome. Please add an analysis test in `tests/analysis_tests.bzl` for any
-new rule and run `bash tools/update_checksums.sh <version>` if you change
-pinned data.
+PRs welcome. The repo is small and the bar is concrete: every change should keep
+`bazel test //...` green on whatever platform you're on, and `tools/update_checksums.py`
+should still regenerate `private/versions.bzl` bit-identically.
+
+Conventions:
+
+- New rules need an analysis test in `tests/analysis_tests.bzl` so they fail fast at
+  `bazel build` time without needing a browser.
+- Bumping the pinned Playwright version: edit `package.json` to the new version,
+  run `pnpm install --lockfile-only` to refresh `pnpm-lock.yaml`, then run
+  `bash tools/update_checksums.sh <new-version>` to refresh `private/versions.bzl`.
+  `//tests:version_drift_test` will fail until both files agree.
+- `MODULE.bazel.lock` is intentionally not committed (matches sibling rules); don't
+  add it.
+
+### Help wanted: macOS validation
+
+**This is the highest-leverage thing an outside contributor can do right now.**
+v0.1 ships pinned `chromium` and `chromium_headless_shell` bundles for `darwin_amd64`
+and `darwin_arm64` (sha256s in `private/versions.bzl`), but the rule has only been
+exercised end-to-end on `linux_amd64`. Specifically unverified:
+
+- That the macOS chromium bundle's headless binary lives where Playwright expects
+  it under `<browsers_root>/chromium_headless_shell-1148/`. Linux ships
+  `chrome-linux/headless_shell`; macOS may ship a different relative layout, and
+  if so the launcher / bundle assembly needs a per-platform shim.
+- That `playwright_bundle`'s file globbing picks up macOS `.app` bundle internals
+  (lots of nested resources) without surprises.
+- That `register_toolchains` resolves `darwin_amd64` and `darwin_arm64` correctly
+  against the `@platforms//os:osx` constraints.
+
+To validate on a Mac:
+
+```bash
+# 1. Host prereqs (one-time):
+brew install bazelisk node corepack
+corepack enable pnpm
+xcode-select --install   # for Bazel's cc toolchain (rules_itest builds a small C sentinel)
+
+# 2. Clone and run the test sweep:
+git clone https://github.com/collider-bazel-extensions/rules_playwright
+cd rules_playwright
+pnpm install --frozen-lockfile
+bazel test //... --test_tag_filters=-manual
+```
+
+Expected outcome: 7 tests pass, including `//tests:smoke_test`,
+`//examples/basic:smoke_test`, and `//examples/itest:ui_test`.
+
+If you hit failures:
+
+- **Playwright says it can't find a browser executable.** Check what subpath it's
+  looking for in the error (e.g. `chrome-mac/Chromium.app/...` vs.
+  `chrome-mac/headless_shell`), unzip the bundle Bazel downloaded
+  (`bazel info output_base` → `external/+playwright+playwright_chromium_headless_shell_darwin_*/`),
+  and compare against what Playwright wants. Open an issue with the diff —
+  this is the most likely failure mode.
+- **`cc_binary` link errors from rules_itest's `exit0`.** Make sure Xcode CLT is
+  installed (`xcode-select -p` should print a path).
+- **Anything else.** File an issue with the full `bazel test` output and your
+  `bazel info release` + macOS version; we'll triage.
+
+A successful run on either darwin platform — even just a green CI log pasted in an
+issue — is enough to flip the macOS row in `DESIGN.md`'s status table from
+**outstanding** to **green**.
