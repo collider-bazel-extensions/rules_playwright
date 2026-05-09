@@ -14,6 +14,7 @@ already has `bazel_dep(name = "rules_kind", ...)`. Requires Docker + kind
 installed on the host.
 """
 
+load("@rules_shell//shell:sh_binary.bzl", "sh_binary")
 load("@rules_playwright//:defs.bzl", "playwright_test")
 load("@rules_kind//:defs.bzl", "kind_cluster", "kind_health_check")
 load("@rules_itest//:itest.bzl", "itest_service", "service_test")
