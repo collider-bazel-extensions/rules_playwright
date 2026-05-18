@@ -32,6 +32,28 @@ def playwright_test_test_suite(name):
     )
     native.test_suite(name = name, tests = [":" + name + "_executable"])
 
+def playwright_test_multi_browser_test_suite(name):
+    """Asserts the macro fans out into one inner rule per browser plus a
+    test_suite wrapper. Each inner target must expose an executable; the
+    wrapper target's existence is implicit in the analysis going through
+    cleanly (test_suite resolves its `tests` attr at analysis)."""
+    playwright_test(
+        name = name + "_subject",
+        srcs = ["smoke.spec.ts"],
+        config = "playwright.config.ts",
+        browsers = ["chromium", "firefox", "webkit"],
+        tags = ["manual"],
+    )
+    inner_tests = []
+    for b in ["chromium", "firefox", "webkit"]:
+        t = "{}_inner_{}".format(name, b)
+        _has_executable_test(
+            name = t,
+            target_under_test = ":{}_subject_{}".format(name, b),
+        )
+        inner_tests.append(":" + t)
+    native.test_suite(name = name, tests = inner_tests)
+
 def playwright_server_test_suite(name):
     playwright_server(
         name = name + "_subject",

@@ -48,11 +48,19 @@ majority. Anything Playwright-specific is flagged.
 | node_modules wiring (`@playwright/test`) | consumer's choice. The in-tree smoke + examples use aspect_rules_js (`//:node_modules/@playwright/test`); README documents both that and a manual `glob(["node_modules/**"])` filegroup pattern as Option B. |
 | macOS validation | **outstanding — bundles pinned but never executed against** |
 
-## Deferred (not v0.1.0)
+## v0.2.0
 
-- Firefox + webkit channels (table extension + new exec paths in `versions.bzl`).
+| # | Decision | Choice |
+|---|---|---|
+| 16 | Firefox + webkit channels | **Wired.** `WANTED_BUNDLES` extended to `["chromium", "chromium-headless-shell", "firefox", "webkit"]`; `BROWSER_TYPE_BUNDLES` adds `firefox` → `["firefox"]` and `webkit` → `["webkit"]`. Linux pin: firefox/webkit ubuntu-22.04 variants (chromium ships a generic linux build). macOS pin: webkit `mac-14` (Sonoma) — webkit ships per-macOS-major builds, no generic mac variant. Non-22.04 / non-mac-14 consumers should fall back to `playwright.system()`. |
+| 17 | Multi-browser BUILD-level matrix | `playwright_test(browsers = [...])` with more than one entry fans out into N `_playwright_test` rule instances named `<name>_<browser>` plus a `test_suite` named `<name>`. Each per-browser target carries the browser literal as a tag for CI matrix selection (`--test_tag_filters=-webkit`). Consumer `playwright.config.ts` must declare a `projects:` entry per browser whose `name` matches the literal — the launcher passes `--project=<browser>` to `playwright test`. Single-browser callers (`browsers = ["chromium"]`, default) get the v0.1 behaviour plus a `chromium` tag — no rename. |
+
+## Deferred (not v0.2.0)
+
 - Trace/screenshot/video as declared outputs (currently rely on `TEST_UNDECLARED_OUTPUTS_DIR`).
 - Branded `chrome` / `msedge` channels (license review).
 - Headed-mode debug target (`bazel run :smoke_test.debug`).
 - `linux_arm64` and Windows.
 - Bundled node toolchain (currently relies on host `npx`).
+- Multi-browser `playwright_server` (`run-server` is one-process-per-browser; single-browser only at v0.2).
+- Wildcard `browsers = ["all"]`. Explicit list only — keeps BUILD changes loud when chrome/msedge channels are added.

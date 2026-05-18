@@ -8,11 +8,11 @@ end-to-end tests and with
 [`rules_kind`](https://github.com/collider-bazel-extensions/rules_kind) for
 in-cluster smokes.
 
-**Supported platforms (v0.1):** Linux (x86\_64). macOS (arm64, x86\_64) bundles
+**Supported platforms (v0.2):** Linux (x86\_64). macOS (arm64, x86\_64) bundles
 are pinned but **validation is pending** — see
 [Contributing → Help wanted: macOS validation](#help-wanted-macos-validation).
 **Supported Playwright versions:** 1.49
-**Supported browsers (v0.1):** Chromium
+**Supported browsers (v0.2):** Chromium, Firefox, WebKit (multi-browser matrix at the BUILD layer — see `playwright_test`).
 
 > **Note on hermeticity.** Browsers are fully pinned. Node, `npx`, and the
 > `@playwright/test` runner are **not** vendored — see
@@ -47,7 +47,7 @@ are pinned but **validation is pending** — see
 ### Bzlmod (MODULE.bazel)
 
 ```python
-bazel_dep(name = "rules_playwright", version = "0.1.0")
+bazel_dep(name = "rules_playwright", version = "0.2.0")
 
 playwright = use_extension("@rules_playwright//:extensions.bzl", "playwright")
 playwright.version(version = "1.49.0")
@@ -64,7 +64,7 @@ use_repo(playwright, "playwright")
 
 ### Legacy WORKSPACE
 
-`rules_playwright` is **Bzlmod-only** in v0.1. The `WORKSPACE` mode is not
+`rules_playwright` is **Bzlmod-only** at v0.2. The `WORKSPACE` mode is not
 supported — `repositories.bzl` does not export top-level setup macros.
 
 ---
@@ -178,15 +178,86 @@ launcher sets `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` and
 | `srcs` | `label_list` | required | Spec files (`.spec.ts`, `.test.ts`, `.spec.js`, `.test.js`). |
 | `config` | `label` | `None` | Optional `playwright.config.ts`. If unset, Playwright applies its own discovery. |
 | `data` | `label_list` | `[]` | Extra runfiles. **Must include `node_modules/@playwright/test`.** |
-| `browsers` | `string_list` | `["chromium"]` | Browser channels. v0.1 supports `chromium` only. |
-| `tags` | `string_list` | `[]` | Always merged with `["playwright", "requires-network", "no-sandbox"]`. |
+| `browsers` | `string_list` | `["chromium"]` | Browser channels. v0.2 supports `chromium`, `firefox`, `webkit`. Multi-entry lists fan out — see below. |
+| `tags` | `string_list` | `[]` | Always merged with `["playwright", "requires-network", "no-sandbox"]` and the browser literal. |
 
-The merged tags are non-negotiable in v0.1 because:
+The merged tags are non-negotiable because:
 
 - `requires-network`: Most UI tests hit a service over the network. Override
   by passing `tags = ["playwright", "no-sandbox"]` if your test is fully offline.
 - `no-sandbox`: Bazel's sandbox conflicts with Chromium's user-namespace
   sandbox. The browser is launched with `--no-sandbox` regardless.
+- Browser literal (`chromium` / `firefox` / `webkit`): enables CI matrix
+  filtering via `--test_tag_filters`. Conflicts with a consumer tag of the
+  same name — pick a different tag if you already use one.
+
+#### Multi-browser matrix
+
+`browsers = ["chromium", "firefox", "webkit"]` fans out at macro-time into one
+test target per browser plus a `test_suite` wrapper:
+
+```python
+playwright_test(
+    name = "smoke",
+    srcs = ["smoke.spec.ts"],
+    config = "playwright.config.ts",
+    browsers = ["chromium", "firefox", "webkit"],
+    data = ["//:node_modules/@playwright/test"],
+)
+```
+
+Generated targets:
+
+| Target | Tags |
+|---|---|
+| `:smoke_chromium` | `playwright`, `requires-network`, `no-sandbox`, `chromium` |
+| `:smoke_firefox` | `playwright`, `requires-network`, `no-sandbox`, `firefox` |
+| `:smoke_webkit` | `playwright`, `requires-network`, `no-sandbox`, `webkit` |
+| `:smoke` (`test_suite`) | only the caller's `tags = [...]` |
+
+`bazel test :smoke` runs all three children. `bazel test :smoke_firefox` runs
+only firefox. `bazel test :smoke --test_tag_filters=-webkit` runs chromium +
+firefox.
+
+**Required `playwright.config.ts` shape** — the consumer config must declare
+a `projects:` entry per browser whose `name` matches the literal:
+
+```typescript
+import { defineConfig, devices } from "@playwright/test";
+
+export default defineConfig({
+  projects: [
+    { name: "chromium", use: { ...devices["Desktop Chrome"] } },
+    { name: "firefox",  use: { ...devices["Desktop Firefox"] } },
+    { name: "webkit",   use: { ...devices["Desktop Safari"] } },
+  ],
+});
+```
+
+The launcher passes `--project=<browser>` to `playwright test`. A missing
+project surfaces as Playwright's own `Project(s) "<name>" not found.
+Available projects: ...` error message.
+
+**OS deps** — firefox + webkit require system libraries beyond what's in the
+bundle (libnss, libxkbcommon, libwoff, etc.). Run once per CI runner / dev
+host:
+
+```bash
+npx playwright install-deps firefox webkit
+```
+
+On Ubuntu 22.04 this is one apt invocation. Other Linux distros (Fedora, Arch,
+ubuntu-20.04, ubuntu-24.04) may not have a matching `install-deps` recipe — if
+the bundled binaries fail with shared-library errors, fall back to
+`playwright.system()` mode and let the host's installed browsers handle it.
+
+**Bundle pins** — v0.2 ships:
+
+- Linux: firefox-`ubuntu-22.04` + webkit-`ubuntu-22.04` (other Ubuntu LTS
+  variants are not vendored).
+- macOS: webkit `mac-14` (Sonoma) for both `darwin_amd64` and `darwin_arm64`;
+  firefox uses Playwright's generic `firefox-mac` / `firefox-mac-arm64`.
+- chromium continues to ship Playwright's generic Linux + macOS builds.
 
 ---
 
@@ -218,7 +289,7 @@ the build-time `port` attr. Setting `$PORT` lets the rule compose with
 | `name` | `string` | required | Target name. |
 | `port` | `int` | `0` | Build-time default port; `0` lets Playwright pick. Overridden at runtime by `$PORT` if set (e.g. via `itest_service.env = {"PORT": port(":svc")}`). |
 | `data` | `label_list` | `[]` | Extra runfiles. **Must include `node_modules/@playwright/test`.** |
-| `browsers` | `string_list` | `["chromium"]` | Browser bundles to assemble in runfiles. v0.1 supports `"chromium"` only. |
+| `browsers` | `string_list` | `["chromium"]` | Browser bundles to assemble in runfiles. v0.2 supports `"chromium"` only (firefox/webkit `run-server` is one-process-per-browser; deferred). |
 
 ---
 
@@ -581,8 +652,10 @@ use_repo(playwright, "playwright_1_48", "playwright_1_49")
 
 **Q: Firefox? WebKit?**
 
-Deferred to v0.2. The download tool already knows how to fetch them; the
-toolchain rule needs new exec-path handling for each channel.
+Both wired at v0.2 — pass `browsers = ["chromium", "firefox", "webkit"]` (or
+any subset) to `playwright_test`. See the `playwright_test` reference for the
+multi-browser fan-out behaviour, required `projects:` config shape, and OS
+deps caveat.
 
 ---
 
@@ -633,9 +706,12 @@ Conventions:
 ### Help wanted: macOS validation
 
 **This is the highest-leverage thing an outside contributor can do right now.**
-v0.1 ships pinned `chromium` and `chromium_headless_shell` bundles for `darwin_amd64`
-and `darwin_arm64` (sha256s in `private/versions.bzl`), but the rule has only been
-exercised end-to-end on `linux_amd64`. Specifically unverified:
+v0.2 ships pinned `chromium`, `chromium_headless_shell`, `firefox`, and `webkit`
+bundles for `darwin_amd64` and `darwin_arm64` (sha256s in `private/versions.bzl`),
+but the rules have only been exercised end-to-end on `linux_amd64`. The webkit
+pins specifically target macOS 14 (Sonoma) — older macOS versions are
+unsupported and will need to fall back to `playwright.system()` mode.
+Specifically unverified:
 
 - That the macOS chromium bundle's headless binary lives where Playwright expects
   it under `<browsers_root>/chromium_headless_shell-1148/`. Linux ships

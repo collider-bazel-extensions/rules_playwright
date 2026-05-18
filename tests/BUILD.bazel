@@ -10,7 +10,12 @@ load("@rules_itest//:itest.bzl", "itest_service", "port", "service_test")
 load("@rules_playwright//:defs.bzl", "playwright_binary", "playwright_health_check", "playwright_server", "playwright_test")
 load("@rules_python//python:defs.bzl", "py_test")
 load("@rules_shell//shell:sh_test.bzl", "sh_test")
-load(":analysis_tests.bzl", "playwright_server_test_suite", "playwright_test_test_suite")
+load(
+    ":analysis_tests.bzl",
+    "playwright_server_test_suite",
+    "playwright_test_multi_browser_test_suite",
+    "playwright_test_test_suite",
+)
 
 # ---- compile-time smoke: rules instantiate cleanly --------------------------
 
@@ -41,9 +46,23 @@ playwright_test(
     data = ["//:node_modules/@playwright/test"],
 )
 
+# Multi-browser smoke. Tagged manual so the default CI cell doesn't run it
+# (firefox + webkit need OS deps installed via `npx playwright install-deps
+# firefox webkit`). The dedicated `multi-browser-smoke` CI job opts in.
+# Fans out into three per-browser children + a test_suite wrapper.
+playwright_test(
+    name = "smoke_multi_browser_test",
+    srcs = ["smoke.spec.ts"],
+    config = "playwright.config.ts",
+    browsers = ["chromium", "firefox", "webkit"],
+    data = ["//:node_modules/@playwright/test"],
+    tags = ["manual"],
+)
+
 # ---- analysis tests (no execution required) ---------------------------------
 
 playwright_test_test_suite(name = "playwright_test_analysis")
+playwright_test_multi_browser_test_suite(name = "playwright_test_multi_browser_analysis")
 playwright_server_test_suite(name = "playwright_server_analysis")
 
 # ---- drift guard ------------------------------------------------------------

@@ -128,6 +128,10 @@ def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--mode", choices=["test", "server", "binary"], required=True)
     ap.add_argument("--config", default="", help="playwright.config.ts (optional).")
+    ap.add_argument("--project", default="",
+                    help="Playwright project name to run (test mode). Maps "
+                         "to the browser literal at the BUILD layer; the "
+                         "consumer's config must declare a matching project.")
     ap.add_argument("--specs", nargs="*", default=[], help="Spec files (test mode).")
     ap.add_argument("--port", type=int, default=0, help="Server mode port.")
     ap.add_argument("forward", nargs=argparse.REMAINDER,
@@ -168,6 +172,13 @@ def main(argv: list[str]) -> int:
         cmd = [node, cli_js, "test"]
         if staged_config:
             cmd += ["--config", staged_config]
+        if args.project:
+            # `--project` is variadic in Playwright's CLI (it accepts multiple
+            # project names). Using two-token form `--project NAME` makes
+            # commander.js consume positional args (including the spec path)
+            # as additional project names. Stick to `--project=NAME` so it
+            # parses as exactly one value.
+            cmd += ["--project=" + args.project]
         cmd += staged_specs
     elif args.mode == "server":
         # $PORT (set by `itest_service.env = {"PORT": port(...)}`) wins over the

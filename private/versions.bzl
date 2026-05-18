@@ -48,6 +48,48 @@ PLAYWRIGHT_VERSIONS = {
                     },
                 },
             },
+            {
+                "name": "firefox",
+                "revision": "1466",
+                "platforms": {
+                    "darwin_amd64": {
+                        "url": "https://playwright.azureedge.net/builds/firefox/1466/firefox-mac.zip",
+                        "sha256": "23de219088bc89bf8b0d5583604aacb23564e2a17c0399b97c0ff97eb02fec2f",
+                        "strip_prefix": "",
+                    },
+                    "darwin_arm64": {
+                        "url": "https://playwright.azureedge.net/builds/firefox/1466/firefox-mac-arm64.zip",
+                        "sha256": "937332d441fdb27d153d7557dedb4bbc4c3fa9c0f7b1f768f55dead95037034c",
+                        "strip_prefix": "",
+                    },
+                    "linux_amd64": {
+                        "url": "https://playwright.azureedge.net/builds/firefox/1466/firefox-ubuntu-22.04.zip",
+                        "sha256": "7566e392e5774ab44481f6b97bd2ed252a200b961463bfcec18744fb81ecde06",
+                        "strip_prefix": "",
+                    },
+                },
+            },
+            {
+                "name": "webkit",
+                "revision": "2104",
+                "platforms": {
+                    "darwin_amd64": {
+                        "url": "https://playwright.azureedge.net/builds/webkit/2104/webkit-mac-14.zip",
+                        "sha256": "b1c13201fa85a58728a719a7c15cd39900df1e1d0816bdf32da1063bebbdb76b",
+                        "strip_prefix": "",
+                    },
+                    "darwin_arm64": {
+                        "url": "https://playwright.azureedge.net/builds/webkit/2104/webkit-mac-14-arm64.zip",
+                        "sha256": "45782f72d93f8852af2a2d5828c825256deb140fbefaeb83fd5714b285ab3582",
+                        "strip_prefix": "",
+                    },
+                    "linux_amd64": {
+                        "url": "https://playwright.azureedge.net/builds/webkit/2104/webkit-ubuntu-22.04.zip",
+                        "sha256": "eca64c507763d9d22b4355c18d39087d3ceeeb31a0abf66928d59e79954a4338",
+                        "strip_prefix": "",
+                    },
+                },
+            },
         ],
     },
 }
@@ -55,6 +97,8 @@ PLAYWRIGHT_VERSIONS = {
 # Bundles required to support each user-facing browser type.
 BROWSER_TYPE_BUNDLES = {
     "chromium": ["chromium", "chromium_headless_shell"],
+    "firefox":  ["firefox"],
+    "webkit":   ["webkit"],
 }
 
 PLATFORMS = {

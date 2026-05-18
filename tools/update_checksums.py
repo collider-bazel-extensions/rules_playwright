@@ -35,12 +35,17 @@ import textwrap
 import urllib.request
 from pathlib import Path
 
-# Bundles we need per Playwright version. v0.1.0 is chromium-only.
-# Add firefox/webkit by extending this list.
-WANTED_BUNDLES = ["chromium", "chromium-headless-shell"]
+# Bundles we need per Playwright version. v0.2.0 adds firefox + webkit.
+WANTED_BUNDLES = ["chromium", "chromium-headless-shell", "firefox", "webkit"]
 
 # Per-bundle URL templates. `%s` is the revision. Keys are bundle names from
 # Playwright's browsers.json. Values are { plat: relative_url_under_cdn }.
+#
+# Linux variants: Playwright ships per-Ubuntu-version builds for firefox +
+# webkit (ubuntu-20.04, ubuntu-22.04, ubuntu-24.04). v0.2.0 pins to
+# ubuntu-22.04; non-22.04 distros (Fedora, Arch, ubuntu-20.04) should fall
+# back to `playwright.system()` mode if shared-library names don't match.
+# chromium ships a single generic linux build.
 BUNDLE_URLS = {
     "chromium": {
         "linux_amd64": "builds/chromium/%s/chromium-linux.zip",
@@ -51,6 +56,21 @@ BUNDLE_URLS = {
         "linux_amd64": "builds/chromium/%s/chromium-headless-shell-linux.zip",
         "darwin_amd64": "builds/chromium/%s/chromium-headless-shell-mac.zip",
         "darwin_arm64": "builds/chromium/%s/chromium-headless-shell-mac-arm64.zip",
+    },
+    "firefox": {
+        "linux_amd64": "builds/firefox/%s/firefox-ubuntu-22.04.zip",
+        "darwin_amd64": "builds/firefox/%s/firefox-mac.zip",
+        "darwin_arm64": "builds/firefox/%s/firefox-mac-arm64.zip",
+    },
+    # webkit ships per-macOS-major builds (no generic webkit-mac.zip). We
+    # pin to mac-14 (Sonoma) for both darwin variants. browsers.json's
+    # revisionOverrides only kick in for mac11/mac12, so mac-14 uses the
+    # default revision. macOS < 14 consumers should fall back to
+    # `playwright.system()`.
+    "webkit": {
+        "linux_amd64": "builds/webkit/%s/webkit-ubuntu-22.04.zip",
+        "darwin_amd64": "builds/webkit/%s/webkit-mac-14.zip",
+        "darwin_arm64": "builds/webkit/%s/webkit-mac-14-arm64.zip",
     },
 }
 
@@ -129,6 +149,8 @@ def render_manifest(versions: dict[str, dict]) -> str:
     out.append('# Bundles required to support each user-facing browser type.\n')
     out.append('BROWSER_TYPE_BUNDLES = {\n')
     out.append('    "chromium": ["chromium", "chromium_headless_shell"],\n')
+    out.append('    "firefox":  ["firefox"],\n')
+    out.append('    "webkit":   ["webkit"],\n')
     out.append('}\n\n')
     out.append('PLATFORMS = {\n')
     for plat, c in sorted(PLATFORM_CONSTRAINTS.items()):

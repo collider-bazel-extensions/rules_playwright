@@ -47,3 +47,56 @@ jobs:
           name: bazel-testlogs
           path: bazel-testlogs/
           if-no-files-found: ignore
+
+  multi_browser:
+    name: bazel test (ubuntu-22.04, firefox + webkit + chromium)
+    # Pin ubuntu-22.04 to match the firefox + webkit bundle variants
+    # (private/versions.bzl pins firefox-ubuntu-22.04.zip + webkit-ubuntu-22.04.zip).
+    # ubuntu-latest's running Jammy at the time of v0.2.0 — still pin
+    # explicitly so a future ubuntu-latest bump doesn't silently break the
+    # cell.
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install host prereqs
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y --no-install-recommends g++ libstdc++-12-dev
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install pnpm
+        run: corepack enable pnpm
+
+      - uses: bazel-contrib/setup-bazel@0.15.0
+        with:
+          bazelisk-cache: true
+          disk-cache: ${{ github.workflow }}-multi-browser
+          repository-cache: true
+
+      - name: Install npm deps
+        run: pnpm install --frozen-lockfile
+
+      # firefox + webkit need OS-level libs (libnss, libxkbcommon, libwoff,
+      # etc.). Playwright's `install-deps` subcommand encapsulates the apt
+      # invocation for the distros it supports; we use `npx playwright` not
+      # the bazel-wrapped binary because this runs once at host-setup time,
+      # not under test action sandboxing.
+      - name: Install Playwright OS deps for firefox + webkit
+        run: npx --yes playwright@1.49.0 install-deps firefox webkit
+
+      - name: bazel test //tests:smoke_multi_browser_test
+        # Explicit named reference bypasses the `manual` wildcard filter.
+        # The test_suite expands to the three per-browser children.
+        run: bazel test //tests:smoke_multi_browser_test --test_output=errors
+
+      - name: Upload test logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bazel-testlogs-multi-browser
+          path: bazel-testlogs/
+          if-no-files-found: ignore

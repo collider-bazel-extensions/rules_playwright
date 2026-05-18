@@ -14,11 +14,18 @@ Tags: `["playwright", "requires-network", "no-sandbox"]` always added.
 """
 
 load("//private:bundle_assembly.bzl", "bundle_runfiles_symlinks", "select_bundles")
+load("//private:versions.bzl", "BROWSER_TYPE_BUNDLES")
 
 def _impl(ctx):
     tc = ctx.toolchains["//toolchain:playwright"]
     bundles = select_bundles(getattr(tc, "bundles", []), ctx.attr.browsers)
     bundle_symlinks, bundle_files = bundle_runfiles_symlinks(bundles)
+
+    # browsers is a single-element list at the rule layer (the macro fans
+    # out multi-browser callers into N rule instances, one browser each).
+    # Use the singular browser literal as Playwright's --project name; the
+    # consumer's playwright.config.ts must declare matching projects.
+    browser = ctx.attr.browsers[0]
 
     runner = ctx.actions.declare_file(ctx.label.name + ".sh")
     ctx.actions.expand_template(
@@ -27,6 +34,7 @@ def _impl(ctx):
         substitutions = {
             "{LAUNCHER}": ctx.executable._launcher.short_path,
             "{CONFIG}": ctx.file.config.short_path if ctx.file.config else "",
+            "{BROWSER}": browser,
             "{SPECS}": " ".join([f.short_path for f in ctx.files.srcs]),
         },
         is_executable = True,
@@ -65,15 +73,53 @@ _playwright_test = rule(
 )
 
 def playwright_test(name, srcs, config = None, data = [], browsers = ["chromium"], tags = [], **kwargs):
-    """Hermetic Playwright test target. See module docstring for runtime contract."""
-    if browsers != ["chromium"]:
-        fail("playwright_test: v0.1.0 supports only `browsers = [\"chromium\"]`")
-    _playwright_test(
+    """Hermetic Playwright test target.
+
+    When `browsers` contains more than one entry, the macro fans out into one
+    `_playwright_test` rule per browser (named `<name>_<browser>`) plus a
+    `test_suite` named `<name>` that aggregates them. Each per-browser target
+    carries the browser literal as a tag so `--test_tag_filters=-webkit` etc.
+    work for CI matrix selection. The consumer's `playwright.config.ts` must
+    declare a `projects:` entry per browser whose `name` matches the literal.
+
+    See module docstring for the broader runtime contract.
+    """
+    if not browsers:
+        fail("playwright_test: `browsers` must be non-empty.")
+    for b in browsers:
+        if b not in BROWSER_TYPE_BUNDLES:
+            fail("playwright_test: unknown browser '{}'. Supported: {}".format(
+                b, sorted(BROWSER_TYPE_BUNDLES.keys())))
+
+    base_tags = tags + ["playwright", "requires-network", "no-sandbox"]
+
+    if len(browsers) == 1:
+        _playwright_test(
+            name = name,
+            srcs = srcs,
+            config = config,
+            data = data,
+            browsers = browsers,
+            tags = base_tags + browsers,
+            **kwargs
+        )
+        return
+
+    inner_names = []
+    for b in browsers:
+        inner = "{}_{}".format(name, b)
+        inner_names.append(inner)
+        _playwright_test(
+            name = inner,
+            srcs = srcs,
+            config = config,
+            data = data,
+            browsers = [b],
+            tags = base_tags + [b],
+            **kwargs
+        )
+    native.test_suite(
         name = name,
-        srcs = srcs,
-        config = config,
-        data = data,
-        browsers = browsers,
-        tags = tags + ["playwright", "requires-network", "no-sandbox"],
-        **kwargs
+        tests = [":" + n for n in inner_names],
+        tags = tags,
     )
