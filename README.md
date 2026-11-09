@@ -47,17 +47,26 @@ are pinned but **validation is pending** — see
 ### Bzlmod (MODULE.bazel)
 
 ```python
-bazel_dep(name = "rules_playwright", version = "0.2.0")
+bazel_dep(name = "rules_playwright", version = "0.2.1")
+```
 
+That's all the wiring: rules_playwright's own `MODULE.bazel` declares the `@playwright` repo (Playwright 1.49.0) and registers its toolchain. rules_playwright isn't in the BCR yet, so pin it with `archive_override` or `git_override`. To choose the version, declare it in your root module:
+
+```python
 playwright = use_extension("@rules_playwright//:extensions.bzl", "playwright")
 playwright.version(version = "1.49.0")
 use_repo(playwright, "playwright")
 ```
 
+Per repo name, the root module's tag wins, otherwise rules_playwright's own; other modules' tags are ignored. A repeated identical tag is harmless; one name declared two different ways, or an unsupported version, fails with a message naming the tag. Through v0.2.0 the root had to declare `playwright.version()`, or resolution failed with `does not generate repository "playwright"`.
+
+The release archive (tag tarball) leaves out `tests/` and `examples/`, which load dev-only modules. The root package still loads the dev-only `@npm` (for this repo's own `//:node_modules`), so `bazel query @rules_playwright//...` fails for consumers; query `@rules_playwright//private/...` or name targets instead.
+
 To use the host-installed `npx` instead of fetching a hermetic browser bundle
 (faster setup, sacrifices hermeticity):
 
 ```python
+playwright = use_extension("@rules_playwright//:extensions.bzl", "playwright")
 playwright.system(name = "playwright")
 use_repo(playwright, "playwright")
 ```
