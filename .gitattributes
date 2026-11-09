@@ -1,0 +1,8 @@
+# Keep dev-only packages out of the release archive: tests/ and examples/
+# load dev-only modules (rules_itest, rules_kind, rules_shell, @npm), which a
+# consumer can't see. GitHub's tag tarballs honour export-ignore. (A
+# git_override clone still has them.) The root package still loads the
+# dev-only @npm for //:node_modules, so `@rules_playwright//...` does not load
+# for consumers; query `@rules_playwright//private/...` or name targets.
+tests/ export-ignore
+examples/ export-ignore

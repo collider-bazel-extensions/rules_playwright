@@ -48,6 +48,22 @@ jobs:
           path: bazel-testlogs/
           if-no-files-found: ignore
 
+  consumer:
+    # rules_playwright as a dependency, from the commit's release archive: a
+    # root without playwright.version() resolves; repeated / unsupported /
+    # conflicting tags; tests/ and examples/ not shipped.
+    name: consumer (ubuntu-latest, git archive)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: bazel-contrib/setup-bazel@0.15.0
+        with:
+          bazelisk-cache: true
+          repository-cache: true
+
+      - name: Consumer checks
+        run: .github/consumer/check.sh "$RUNNER_TEMP/consumer"
+
   multi_browser:
     name: bazel test (ubuntu-22.04, firefox + webkit + chromium)
     # Pin ubuntu-22.04 to match the firefox + webkit bundle variants
