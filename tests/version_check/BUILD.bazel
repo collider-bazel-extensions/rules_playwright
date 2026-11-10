@@ -1,0 +1,21 @@
+# playwright_test's @playwright/test version check, on fixture packages
+# (no node or browsers run: the validation action fails at build time,
+# before any test would).
+
+load("@rules_playwright//:defs.bzl", "playwright_test")
+
+playwright_test(
+    name = "match",
+    srcs = ["//tests:smoke.spec.ts"],
+    data = ["v1_49_0/@playwright/test/package.json"],
+    tags = ["manual"],
+)
+
+# `bazel build //tests/version_check:mismatch` must fail naming both
+# versions; CI checks that.
+playwright_test(
+    name = "mismatch",
+    srcs = ["//tests:smoke.spec.ts"],
+    data = ["v1_50_0/@playwright/test/package.json"],
+    tags = ["manual"],
+)

@@ -18,11 +18,18 @@ py_binary(
     main = "launcher.py",
 )
 
+py_binary(
+    name = "version_check",
+    srcs = ["version_check.py"],
+    main = "version_check.py",
+)
+
 bzl_library(name = "providers", srcs = ["providers.bzl"])
 bzl_library(name = "versions", srcs = ["versions.bzl"])
+bzl_library(name = "node", srcs = ["node.bzl"])
 bzl_library(name = "bundle_assembly", srcs = ["bundle_assembly.bzl"], deps = [":providers", ":versions"])
-bzl_library(name = "playwright_binary", srcs = ["playwright_binary.bzl"])
-bzl_library(name = "playwright_test", srcs = ["playwright_test.bzl"], deps = [":bundle_assembly"])
-bzl_library(name = "playwright_server", srcs = ["playwright_server.bzl"], deps = [":bundle_assembly"])
+bzl_library(name = "playwright_binary", srcs = ["playwright_binary.bzl"], deps = [":node"])
+bzl_library(name = "playwright_test", srcs = ["playwright_test.bzl"], deps = [":bundle_assembly", ":node"])
+bzl_library(name = "playwright_server", srcs = ["playwright_server.bzl"], deps = [":bundle_assembly", ":node"])
 bzl_library(name = "playwright_health_check", srcs = ["playwright_health_check.bzl"])
 bzl_library(name = "repositories", srcs = ["repositories.bzl"], deps = [":versions"])

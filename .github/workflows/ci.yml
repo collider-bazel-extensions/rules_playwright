@@ -37,8 +37,30 @@ jobs:
       - name: Install npm deps
         run: pnpm install --frozen-lockfile
 
+      - name: A test PATH without node (the rules run the rules_nodejs toolchain's)
+        # Bazel itself (bazelisk from npm) and pnpm keep the host node; the
+        # tests get /usr/bin minus node / npx / npm.
+        run: |
+          set -euo pipefail
+          d="$RUNNER_TEMP/path-without-node"
+          mkdir -p "$d"
+          for f in /usr/bin/*; do
+            case "$(basename "$f")" in node|nodejs|npx|npm|corepack) continue ;; esac
+            ln -s "$f" "$d/"
+          done
+          if PATH="$d" command -v node; then echo "node still on the test PATH" >&2; exit 1; fi
+          echo "TEST_PATH=$d" >> "$GITHUB_ENV"
+
       - name: bazel test //...
-        run: bazel test //... --test_tag_filters=-manual --test_output=errors
+        run: bazel test //... --test_tag_filters=-manual --test_output=errors --test_env=PATH="$TEST_PATH"
+
+      - name: A mismatched @playwright/test fails the build
+        run: |
+          if bazel build //tests/version_check:mismatch 2> mismatch.out; then
+            echo "//tests/version_check:mismatch built" >&2; exit 1
+          fi
+          grep -F 'has @playwright/test 1.50.0 in `data`, but the Playwright toolchain is pinned to 1.49.0' mismatch.out
+          bazel build //tests/version_check:match
 
       - name: Upload test logs on failure
         if: failure()
@@ -51,7 +73,8 @@ jobs:
   consumer:
     # rules_playwright as a dependency, from the commit's release archive: a
     # root without playwright.version() resolves; repeated / unsupported /
-    # conflicting tags; tests/ and examples/ not shipped.
+    # conflicting tags; tests/ and examples/ not shipped; node comes from
+    # rules_nodejs's default toolchain.
     name: consumer (ubuntu-latest, git archive)
     runs-on: ubuntu-latest
     steps:

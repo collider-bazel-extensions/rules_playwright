@@ -14,10 +14,12 @@ are pinned but **validation is pending** — see
 **Supported Playwright versions:** 1.49
 **Supported browsers (v0.2):** Chromium, Firefox, WebKit (multi-browser matrix at the BUILD layer — see `playwright_test`).
 
-> **Note on hermeticity.** Browsers are fully pinned. Node, `npx`, and the
-> `@playwright/test` runner are **not** vendored — see
-> [Hermeticity exceptions](#hermeticity-exceptions) before depending on this
-> for production CI.
+> **Note on hermeticity.** Browsers are pinned by sha256, and `node` comes
+> from the rules_nodejs toolchain, never the host's `PATH` (`npx` isn't used).
+> The `@playwright/test` runner comes from your own lockfile, and its version
+> is checked against the pinned Playwright at build time. The browsers' system
+> libraries still come from the host — see
+> [Hermeticity exceptions](#hermeticity-exceptions).
 
 ---
 
@@ -47,10 +49,10 @@ are pinned but **validation is pending** — see
 ### Bzlmod (MODULE.bazel)
 
 ```python
-bazel_dep(name = "rules_playwright", version = "0.2.1")
+bazel_dep(name = "rules_playwright", version = "0.3.0")
 ```
 
-That's all the wiring: rules_playwright's own `MODULE.bazel` declares the `@playwright` repo (Playwright 1.49.0) and registers its toolchain. rules_playwright isn't in the BCR yet, so pin it with `archive_override` or `git_override`. To choose the version, declare it in your root module:
+That's all the wiring: rules_playwright's own `MODULE.bazel` declares the `@playwright` repo (Playwright 1.49.0) and registers its toolchain. `node` comes from [rules_nodejs](https://github.com/bazel-contrib/rules_nodejs)'s runtime toolchain: rules_nodejs (a BCR module, and a dependency of rules_playwright since v0.3.0) registers its default node for every build, and a `node.toolchain(node_version = ...)` in your root module takes precedence. rules_playwright isn't in the BCR yet, so pin it with `archive_override` or `git_override`. To choose the version, declare it in your root module:
 
 ```python
 playwright = use_extension("@rules_playwright//:extensions.bzl", "playwright")
@@ -175,7 +177,8 @@ playwright_test(
 )
 ```
 
-Runs `npx playwright test` against the resolved hermetic browser. The test
+Runs `playwright test` (`@playwright/test`'s `cli.js`, on the rules_nodejs
+toolchain's node) against the resolved hermetic browser. The test
 launcher sets `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` and
 `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1` so Playwright never fetches its own copy.
 
@@ -281,7 +284,7 @@ playwright_server(
 )
 ```
 
-Long-running `npx playwright run-server`. Drops directly into
+Long-running `playwright run-server`, on the rules_nodejs toolchain's node. Drops directly into
 `itest_service.exe`. Companion: [`playwright_health_check`](#playwright_health_check).
 Use this when you want a single browser daemon shared across multiple tests
 in a service group.
@@ -528,7 +531,7 @@ The `chromium` browser type is delivered as multiple bundles — see
 
 ## Environment variables injected by `playwright_test`
 
-The launcher sets these in the test process before `exec`'ing `npx playwright`:
+The launcher sets these in the test process before running `@playwright/test`'s `cli.js` with the toolchain's `node`:
 
 | Variable | Example | Description |
 |---|---|---|
@@ -552,11 +555,23 @@ Read this section carefully before depending on it for reproducible CI.
 
 | Dependency | Why it's host-resolved | Risk |
 |---|---|---|
-| `node` (Node.js runtime) | v0.1 deliberately avoids `aspect_rules_js` to keep the dep graph minimal. The launcher invokes `npx` from `$PATH`. | Different Node major versions can change Playwright's behavior. Pin via your CI image. |
-| `npx` | Same as above. | Same as above. |
-| `@playwright/test` (the test runner JS code) | Must be in the test target's runfiles via `data = [...]`. We do not download the npm package ourselves. | Mismatch between the npm-installed runner version and the Bazel-pinned browser revision causes Playwright to attempt re-download (suppressed by `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1`, but tests may fail with version-incompatibility errors). Keep them in sync. |
-| Shared libraries the browser needs (`libnss3`, `libatk`, `libcups2`, `libxkbcommon0`, `libgbm1`, `libasound2`, …) | Bundling a sysroot is a large undertaking deferred from v0.1. The browser binary is dynamically linked against the host's glibc + GTK stack. | Test passes on developer laptop, fails on slim CI image. The fix is to use a CI image with the libs preinstalled (e.g. `mcr.microsoft.com/playwright`). |
+| Shared libraries the browser needs (see [below](#system-libraries)) | Bundling a sysroot is a large undertaking, still deferred. The browser binary is dynamically linked against the host's glibc and desktop stack. | Test passes on developer laptop, fails on slim CI image. The fix is to use a CI image with the libs preinstalled (e.g. `mcr.microsoft.com/playwright`). |
 | `/dev/shm` | Chromium needs a writable `/dev/shm` of meaningful size. | Container runtimes default `/dev/shm` to 64 MB; complex pages OOM. Pass `--ipc=host` to docker, or mount a larger tmpfs. |
+
+### Vendored or checked since v0.3.0
+
+| Dependency | How |
+|---|---|
+| `node` | From the rules_nodejs runtime toolchain (`@rules_nodejs//nodejs:runtime_toolchain_type`) for the target platform, placed in runfiles; `playwright_test`, `playwright_server` and `playwright_binary` never look at `$PATH`. `npx` is not used (the launcher runs `@playwright/test`'s `cli.js` directly). Through v0.2.1 the launcher took `node` from `$PATH`. |
+| `@playwright/test` | Still yours, from `data` (your rules_js lockfile or a `node_modules` filegroup). A validation action reads its `package.json` and fails `bazel build` unless its version is the toolchain's pinned Playwright (`playwright.version`); a different runner would look for browser revisions the pinned bundles don't have. Skipped in `system` mode. |
+
+### System libraries
+
+The pinned Chromium headless shell (1.49.0, `chromium_headless_shell-1148`) links against these, besides glibc (`libc`, `libm`, `libdl`, `libpthread`, `ld-linux`) and `libgcc_s` (from its ELF `NEEDED` entries; its GL and Vulkan libraries ship in the bundle):
+
+`libasound.so.2`, `libatk-1.0.so.0`, `libatk-bridge-2.0.so.0`, `libatspi.so.0`, `libdbus-1.so.3`, `libdrm.so.2`, `libexpat.so.1`, `libgbm.so.1`, `libgio-2.0.so.0`, `libglib-2.0.so.0`, `libgobject-2.0.so.0`, `libnspr4.so`, `libnss3.so`, `libnssutil3.so`, `libudev.so.1`, `libX11.so.6`, `libxcb.so.1`, `libXcomposite.so.1`, `libXdamage.so.1`, `libXext.so.6`, `libXfixes.so.3`, `libxkbcommon.so.0`, `libXrandr.so.2`.
+
+On Debian and Ubuntu, `npx playwright install-deps chromium` installs the matching packages (Playwright keeps that mapping per distro release); `mcr.microsoft.com/playwright:v1.49.0` has them preinstalled. Firefox and WebKit need more, see [OS deps](#playwright_test).
 
 ### Sandbox interaction
 
@@ -691,7 +706,13 @@ fetches each platform's chromium bundle, computes sha256, and rewrites
 
 Host system libraries aren't vendored — see
 [Hermeticity exceptions](#hermeticity-exceptions). Either run on
-`mcr.microsoft.com/playwright` or `apt install libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libxkbcommon0 libgbm1 libasound2`.
+`mcr.microsoft.com/playwright` or install the [system libraries](#system-libraries) (`npx playwright install-deps chromium` on Debian/Ubuntu).
+
+---
+
+**Q: `bazel build` fails with `has @playwright/test X in data, but the Playwright toolchain is pinned to Y`.**
+
+Your lockfile's `@playwright/test` differs from the pinned Playwright. Pin `@playwright/test` to Y, or set `playwright.version(version = "X")` if rules_playwright pins X.
 
 ---
 

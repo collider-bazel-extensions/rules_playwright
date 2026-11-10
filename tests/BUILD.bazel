@@ -17,6 +17,8 @@ load(
     "playwright_test_test_suite",
 )
 
+exports_files(["smoke.spec.ts"])
+
 # ---- compile-time smoke: rules instantiate cleanly --------------------------
 
 playwright_binary(

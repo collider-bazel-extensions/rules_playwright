@@ -1,4 +1,5 @@
-"""playwright_server — long-running `npx playwright run-server`.
+"""playwright_server — long-running `playwright run-server`, on the
+rules_nodejs toolchain's node.
 
 Drops into `itest_service.exe` (see [`rules_itest` integration](#rules_itest-integration)
 in the README). Pass `@playwright/test` and any other npm runtime via `data`,
@@ -15,11 +16,13 @@ Browser bundles come from the toolchain and are assembled into the same
 """
 
 load("//private:bundle_assembly.bzl", "bundle_runfiles_symlinks", "select_bundles")
+load("//private:node.bzl", "NODE_TOOLCHAIN", "VERSION_CHECK_ATTR", "node_runtime", "playwright_version_check")
 
 def _impl(ctx):
     tc = ctx.toolchains["//toolchain:playwright"]
     bundles = select_bundles(getattr(tc, "bundles", []), ctx.attr.browsers)
     bundle_symlinks, bundle_files = bundle_runfiles_symlinks(bundles)
+    node_arg, node_files = node_runtime(ctx)
 
     out = ctx.actions.declare_file(ctx.label.name + ".sh")
     ctx.actions.expand_template(
@@ -27,17 +30,21 @@ def _impl(ctx):
         output = out,
         substitutions = {
             "{LAUNCHER}": ctx.executable._launcher.short_path,
+            "{NODE}": node_arg,
             "{PORT}": str(ctx.attr.port),
         },
         is_executable = True,
     )
     runfiles = ctx.runfiles(
         files = [ctx.executable._launcher] + ctx.files.data,
-        transitive_files = bundle_files,
+        transitive_files = depset(transitive = [bundle_files, node_files]),
         symlinks = bundle_symlinks,
     )
     runfiles = runfiles.merge(ctx.attr._launcher[DefaultInfo].default_runfiles)
-    return [DefaultInfo(executable = out, runfiles = runfiles)]
+    return [
+        DefaultInfo(executable = out, runfiles = runfiles),
+        OutputGroupInfo(_validation = depset(playwright_version_check(ctx, tc.playwright.version))),
+    ]
 
 playwright_server = rule(
     implementation = _impl,
@@ -58,7 +65,8 @@ playwright_server = rule(
             default = "//private:server.sh.tmpl",
             allow_single_file = True,
         ),
+        "_version_check": VERSION_CHECK_ATTR,
     },
-    toolchains = ["//toolchain:playwright"],
+    toolchains = ["//toolchain:playwright", NODE_TOOLCHAIN],
     executable = True,
 )

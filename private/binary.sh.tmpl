@@ -8,4 +8,4 @@ if [[ -z "${RUNFILES_DIR:-}" ]]; then
   export RUNFILES_DIR
 fi
 
-exec "${RUNFILES_DIR}/_main/{LAUNCHER}" --mode binary -- "$@"
+exec "${RUNFILES_DIR}/_main/{LAUNCHER}" --mode binary --node "{NODE}" -- "$@"

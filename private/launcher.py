@@ -4,7 +4,8 @@
 Same role as launcher.py in rules_pg / rules_temporal / rules_kind. Owns:
 - env setup (PLAYWRIGHT_BROWSERS_PATH, PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD,
   HOME, TMPDIR)
-- direct invocation of `@playwright/test`'s `cli.js` via `node` — we don't
+- direct invocation of `@playwright/test`'s `cli.js` via the rules_nodejs
+  toolchain's `node` (`--node`, a runfiles path; never the host's) — we don't
   use `npx`, both because rules_js's virtual-store layout doesn't expose a
   `node_modules/.bin/playwright` and because direct invocation is simpler:
   cli.js's `require('playwright/...')` resolves via its own realpath, where
@@ -38,6 +39,19 @@ def _resolve_runfiles(rel: str) -> str:
     if os.path.exists(candidate):
         return candidate
     return rel
+
+
+def _resolve_node(rfd: str | None, node: str) -> str | None:
+    """`--node` is the toolchain node's short_path (`../<repo>/bin/node` for
+    an external repo, `<pkg>/node` for a main-repo one) or, for a toolchain
+    configured with `node_path`, an absolute path."""
+    if os.path.isabs(node):
+        return node if os.path.exists(node) else None
+    if not rfd:
+        return None
+    rel = node[3:] if node.startswith("../") else os.path.join("_main", node)
+    cand = os.path.join(rfd, rel)
+    return cand if os.path.exists(cand) else None
 
 
 def _candidate_dirs(rfd: str, hint: str | None) -> list[str]:
@@ -127,6 +141,9 @@ def _stage_specs(specs: list[str], config: str | None, node_modules_src: str | N
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--mode", choices=["test", "server", "binary"], required=True)
+    ap.add_argument("--node", required=True,
+                    help="The rules_nodejs runtime toolchain's node (runfiles "
+                         "short_path, or an absolute node_path).")
     ap.add_argument("--config", default="", help="playwright.config.ts (optional).")
     ap.add_argument("--project", default="",
                     help="Playwright project name to run (test mode). Maps "
@@ -150,9 +167,10 @@ def main(argv: list[str]) -> int:
     env["PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD"] = "1"
     env["HOME"] = env.get("TEST_TMPDIR", env.get("TMPDIR", "/tmp"))
 
-    node = shutil.which("node")
+    node = _resolve_node(rfd, args.node)
     if not node:
-        print("rules_playwright: `node` not found on PATH", file=sys.stderr)
+        print("rules_playwright: the rules_nodejs toolchain's node ({}) is not "
+              "in runfiles".format(args.node), file=sys.stderr)
         return 127
 
     hint = args.specs[0] if args.specs else (args.config or None)

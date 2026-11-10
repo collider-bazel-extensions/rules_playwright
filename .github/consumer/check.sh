@@ -7,6 +7,8 @@
 #   3. an unsupported version fails, naming playwright.version
 #   4. one repo name declared two ways in the root fails clearly
 #   5. tests/ and examples/ are not shipped; @rules_playwright//private/... loads
+#   6. with no node.toolchain() of its own, a consumer's playwright_binary
+#      runs rules_nodejs's default node, from runfiles (not PATH)
 # Usage: .github/consumer/check.sh <scratch dir>
 set -euo pipefail
 repo="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -71,3 +73,27 @@ echo "PASS: conflicting declarations fail clearly"
 # 5. The shipped packages load (the root package loads the dev-only @npm).
 (cd "$work/untagged" && bazel query "@rules_playwright//private/... + @rules_playwright//toolchain/..." >/dev/null)
 echo "PASS: @rules_playwright//private/... and //toolchain/... load"
+
+# 6. node comes from rules_nodejs's default runtime toolchain. With no
+#    @playwright/test in `data`, the launcher gets past node and stops at
+#    cli.js, so its message proves which node it resolved.
+cat > "$work/untagged/BUILD.bazel" <<'BUILD'
+load("@rules_playwright//:defs.bzl", "playwright_binary")
+
+playwright_binary(name = "pw")
+BUILD
+(cd "$work/untagged" && bazel build //:pw >/dev/null 2>&1)
+node_arg="$(sed -n 's/.*--node "\([^"]*\)".*/\1/p' "$work/untagged/bazel-bin/pw.sh")"
+[[ "$node_arg" == ../rules_nodejs++node+nodejs_linux_amd64/* ]] || { echo "FAIL: --node is '$node_arg', not rules_nodejs's default node" >&2; exit 1; }
+[[ -x "$work/untagged/bazel-bin/pw.sh.runfiles/${node_arg#../}" ]] || { echo "FAIL: $node_arg is not in runfiles" >&2; exit 1; }
+nonode="$work/path-without-node"
+mkdir -p "$nonode"
+for f in /usr/bin/*; do
+    case "$(basename "$f")" in node|nodejs|npx|npm|corepack) continue ;; esac
+    ln -s "$f" "$nonode/"
+done
+if (cd "$work/untagged" && env PATH="$nonode" bazel-bin/pw.sh --version) > "$work/pw.out" 2>&1; then
+    echo "FAIL: pw ran without @playwright/test" >&2; exit 1
+fi
+grep -q "@playwright/test/cli.js not found" "$work/pw.out" || { cat "$work/pw.out" >&2; echo "FAIL: launcher did not resolve node" >&2; exit 1; }
+echo "PASS: playwright_binary runs rules_nodejs's node ($node_arg), not the host's"
