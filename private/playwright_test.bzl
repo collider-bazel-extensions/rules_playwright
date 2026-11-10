@@ -4,7 +4,10 @@ Contract:
 - Caller provides a `playwright.config.ts` (or accepts the default discovery).
 - Runfiles must include `node_modules/@playwright/test` — supplied via
   `data` (e.g. `aspect_rules_js`'s `npm_link_package`, or a manually-installed
-  `node_modules` filegroup). Host `node` + `npx` must be on PATH.
+  `node_modules` filegroup). Its version must match the toolchain's
+  pinned Playwright: a validation action fails `bazel build` otherwise.
+- `node` comes from the rules_nodejs runtime toolchain (never the host's
+  PATH), and `npx` is not used.
 - Browser bundles come from the toolchain. We assemble a `browsers/` tree in
   runfiles whose layout matches Playwright's cache (`<name>-<rev>/...`) and
   point `PLAYWRIGHT_BROWSERS_PATH` there. `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1`
@@ -15,6 +18,7 @@ Tags: `["playwright", "requires-network", "no-sandbox"]` always added.
 
 load("//private:bundle_assembly.bzl", "bundle_runfiles_symlinks", "select_bundles")
 load("//private:versions.bzl", "BROWSER_TYPE_BUNDLES")
+load("//private:node.bzl", "NODE_TOOLCHAIN", "VERSION_CHECK_ATTR", "node_runtime", "playwright_version_check")
 
 def _impl(ctx):
     tc = ctx.toolchains["//toolchain:playwright"]
@@ -26,6 +30,7 @@ def _impl(ctx):
     # Use the singular browser literal as Playwright's --project name; the
     # consumer's playwright.config.ts must declare matching projects.
     browser = ctx.attr.browsers[0]
+    node_arg, node_files = node_runtime(ctx)
 
     runner = ctx.actions.declare_file(ctx.label.name + ".sh")
     ctx.actions.expand_template(
@@ -33,6 +38,7 @@ def _impl(ctx):
         output = runner,
         substitutions = {
             "{LAUNCHER}": ctx.executable._launcher.short_path,
+            "{NODE}": node_arg,
             "{CONFIG}": ctx.file.config.short_path if ctx.file.config else "",
             "{BROWSER}": browser,
             "{SPECS}": " ".join([f.short_path for f in ctx.files.srcs]),
@@ -45,11 +51,14 @@ def _impl(ctx):
         direct_files.append(ctx.file.config)
     runfiles = ctx.runfiles(
         files = direct_files,
-        transitive_files = bundle_files,
+        transitive_files = depset(transitive = [bundle_files, node_files]),
         symlinks = bundle_symlinks,
     )
     runfiles = runfiles.merge(ctx.attr._launcher[DefaultInfo].default_runfiles)
-    return [DefaultInfo(executable = runner, runfiles = runfiles)]
+    return [
+        DefaultInfo(executable = runner, runfiles = runfiles),
+        OutputGroupInfo(_validation = depset(playwright_version_check(ctx, tc.playwright.version))),
+    ]
 
 _playwright_test = rule(
     implementation = _impl,
@@ -67,8 +76,9 @@ _playwright_test = rule(
             default = "//private:launcher.sh.tmpl",
             allow_single_file = True,
         ),
+        "_version_check": VERSION_CHECK_ATTR,
     },
-    toolchains = ["//toolchain:playwright"],
+    toolchains = ["//toolchain:playwright", NODE_TOOLCHAIN],
     test = True,
 )
 

@@ -2,12 +2,17 @@
 
 module(
     name = "rules_playwright",
-    version = "0.2.1",
+    version = "0.3.0",
 )
 
 bazel_dep(name = "bazel_skylib", version = "1.8.2")
 bazel_dep(name = "platforms", version = "1.0.0")
 bazel_dep(name = "rules_python", version = "1.7.0")
+
+# Public: playwright_test / playwright_server / playwright_binary run node
+# from the rules_nodejs runtime toolchain (rules_nodejs registers its
+# default node for every module; a consumer's own node.toolchain() wins).
+bazel_dep(name = "rules_nodejs", version = "6.7.4")
 
 playwright = use_extension("//:extensions.bzl", "playwright")
 
@@ -31,7 +36,6 @@ register_toolchains("@playwright//:all")
 # can use rules_js the same way (see README), or any other approach that lands
 # `node_modules/@playwright/test` in their test target's runfiles.
 bazel_dep(name = "aspect_rules_js", version = "3.0.3", dev_dependency = True)
-bazel_dep(name = "rules_nodejs", version = "6.7.4", dev_dependency = True)
 bazel_dep(name = "rules_itest", version = "0.0.52", dev_dependency = True)
 bazel_dep(name = "rules_shell", version = "0.8.0", dev_dependency = True)
 
