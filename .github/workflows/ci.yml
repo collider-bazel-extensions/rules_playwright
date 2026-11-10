@@ -37,8 +37,30 @@ jobs:
       - name: Install npm deps
         run: pnpm install --frozen-lockfile
 
+      - name: Delete host node (the rules run the rules_nodejs toolchain's)
+        # pnpm install above is the only step that needs a host node.
+        run: |
+          set -euo pipefail
+          for b in node npx npm pnpm corepack; do
+            for _ in 1 2 3 4 5; do
+              p="$(command -v "$b" || true)"
+              [[ -n "$p" ]] || break
+              sudo rm -f "$(readlink -f "$p")" "$p"
+              hash -r
+            done
+          done
+          if command -v node; then echo "host node still on PATH" >&2; exit 1; fi
+
       - name: bazel test //...
         run: bazel test //... --test_tag_filters=-manual --test_output=errors
+
+      - name: A mismatched @playwright/test fails the build
+        run: |
+          if bazel build //tests/version_check:mismatch 2> mismatch.out; then
+            echo "//tests/version_check:mismatch built" >&2; exit 1
+          fi
+          grep -F 'has @playwright/test 1.50.0 in `data`, but the Playwright toolchain is pinned to 1.49.0' mismatch.out
+          bazel build //tests/version_check:match
 
       - name: Upload test logs on failure
         if: failure()
@@ -51,7 +73,8 @@ jobs:
   consumer:
     # rules_playwright as a dependency, from the commit's release archive: a
     # root without playwright.version() resolves; repeated / unsupported /
-    # conflicting tags; tests/ and examples/ not shipped.
+    # conflicting tags; tests/ and examples/ not shipped; node comes from
+    # rules_nodejs's default toolchain.
     name: consumer (ubuntu-latest, git archive)
     runs-on: ubuntu-latest
     steps:
