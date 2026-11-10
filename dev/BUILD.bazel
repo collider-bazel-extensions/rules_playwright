@@ -1,0 +1,10 @@
+load("@npm//:defs.bzl", "npm_link_all_packages")
+
+# Dev-only npm workspace (package.json + pnpm-lock.yaml): links @npm//... into
+# //dev:node_modules/* so this repo's tests and examples can pass
+# //dev:node_modules/@playwright/test via `data`. It lives here, not in the
+# root package, because @npm is a dev-only repo: a root package that loads it
+# can't load for consumers. dev/ is export-ignore'd (.gitattributes).
+npm_link_all_packages(name = "node_modules")
+
+exports_files(["pnpm-lock.yaml"])
