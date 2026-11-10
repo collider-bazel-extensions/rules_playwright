@@ -45,7 +45,7 @@ node.toolchain(node_version = "22.9.0")
 npm = use_extension("@aspect_rules_js//npm:extensions.bzl", "npm", dev_dependency = True)
 npm.npm_translate_lock(
     name = "npm",
-    pnpm_lock = "//:pnpm-lock.yaml",
+    pnpm_lock = "//dev:pnpm-lock.yaml",
     verify_node_modules_ignored = "//:.bazelignore",
 )
 use_repo(npm, "npm")

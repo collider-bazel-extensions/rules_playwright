@@ -1,5 +1,4 @@
 load("@bazel_skylib//:bzl_library.bzl", "bzl_library")
-load("@npm//:defs.bzl", "npm_link_all_packages")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -9,13 +8,7 @@ exports_files([
     "defs.bzl",
     "extensions.bzl",
     "repositories.bzl",
-    "pnpm-lock.yaml",
 ])
-
-# Dev-only: links @npm//... into //:node_modules/* so //tests:smoke_test can
-# pass //:node_modules/@playwright/test via `data`. Not part of the rule
-# library's public surface; safe to ignore for consumers.
-npm_link_all_packages(name = "node_modules")
 
 bzl_library(
     name = "defs",
