@@ -86,7 +86,13 @@ BUILD
 node_arg="$(sed -n 's/.*--node "\([^"]*\)".*/\1/p' "$work/untagged/bazel-bin/pw.sh")"
 [[ "$node_arg" == ../rules_nodejs++node+nodejs_linux_amd64/* ]] || { echo "FAIL: --node is '$node_arg', not rules_nodejs's default node" >&2; exit 1; }
 [[ -x "$work/untagged/bazel-bin/pw.sh.runfiles/${node_arg#../}" ]] || { echo "FAIL: $node_arg is not in runfiles" >&2; exit 1; }
-if (cd "$work/untagged" && env PATH=/usr/sbin:/sbin bazel-bin/pw.sh --version) > "$work/pw.out" 2>&1; then
+nonode="$work/path-without-node"
+mkdir -p "$nonode"
+for f in /usr/bin/*; do
+    case "$(basename "$f")" in node|nodejs|npx|npm|corepack) continue ;; esac
+    ln -s "$f" "$nonode/"
+done
+if (cd "$work/untagged" && env PATH="$nonode" bazel-bin/pw.sh --version) > "$work/pw.out" 2>&1; then
     echo "FAIL: pw ran without @playwright/test" >&2; exit 1
 fi
 grep -q "@playwright/test/cli.js not found" "$work/pw.out" || { cat "$work/pw.out" >&2; echo "FAIL: launcher did not resolve node" >&2; exit 1; }

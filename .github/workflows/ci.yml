@@ -37,22 +37,22 @@ jobs:
       - name: Install npm deps
         run: pnpm install --frozen-lockfile
 
-      - name: Delete host node (the rules run the rules_nodejs toolchain's)
-        # pnpm install above is the only step that needs a host node.
+      - name: A test PATH without node (the rules run the rules_nodejs toolchain's)
+        # Bazel itself (bazelisk from npm) and pnpm keep the host node; the
+        # tests get /usr/bin minus node / npx / npm.
         run: |
           set -euo pipefail
-          for b in node npx npm pnpm corepack; do
-            for _ in 1 2 3 4 5; do
-              p="$(command -v "$b" || true)"
-              [[ -n "$p" ]] || break
-              sudo rm -f "$(readlink -f "$p")" "$p"
-              hash -r
-            done
+          d="$RUNNER_TEMP/path-without-node"
+          mkdir -p "$d"
+          for f in /usr/bin/*; do
+            case "$(basename "$f")" in node|nodejs|npx|npm|corepack) continue ;; esac
+            ln -s "$f" "$d/"
           done
-          if command -v node; then echo "host node still on PATH" >&2; exit 1; fi
+          if PATH="$d" command -v node; then echo "node still on the test PATH" >&2; exit 1; fi
+          echo "TEST_PATH=$d" >> "$GITHUB_ENV"
 
       - name: bazel test //...
-        run: bazel test //... --test_tag_filters=-manual --test_output=errors
+        run: bazel test //... --test_tag_filters=-manual --test_output=errors --test_env=PATH="$TEST_PATH"
 
       - name: A mismatched @playwright/test fails the build
         run: |
