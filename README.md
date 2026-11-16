@@ -786,3 +786,11 @@ If you hit failures:
 A successful run on either darwin platform — even just a green CI log pasted in an
 issue — is enough to flip the macOS row in `DESIGN.md`'s status table from
 **outstanding** to **green**.
+
+---
+
+## Requesting a new rules package
+
+Want Bazel rules for another tool or service?
+[Request a rules package](https://github.com/collider-bazel-extensions/.github/issues/new?template=request-a-rules-package.yml).
+The [organization page](https://github.com/collider-bazel-extensions) lists every package.
