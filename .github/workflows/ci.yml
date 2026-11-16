@@ -35,7 +35,7 @@ jobs:
           repository-cache: true
 
       - name: Install npm deps
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile --dir dev
 
       - name: A test PATH without node (the rules run the rules_nodejs toolchain's)
         # Bazel itself (bazelisk from npm) and pnpm keep the host node; the
@@ -117,7 +117,7 @@ jobs:
           repository-cache: true
 
       - name: Install npm deps
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile --dir dev
 
       # firefox + webkit need OS-level libs (libnss, libxkbcommon, libwoff,
       # etc.). Playwright's `install-deps` subcommand encapsulates the apt
