@@ -50,9 +50,18 @@ are pinned but **validation is pending** — see
 
 ```python
 bazel_dep(name = "rules_playwright", version = "0.3.1")
+archive_override(
+    module_name = "rules_playwright",
+    urls = ["https://github.com/collider-bazel-extensions/rules_playwright/archive/refs/tags/v0.3.1.tar.gz"],
+    strip_prefix = "rules_playwright-0.3.1",
+    integrity = "sha256-9ICIltLb+Yg9CK4j3W4GE+daG/WNBZFupajbMX+yThA=",
+)
 ```
 
-That's all the wiring: rules_playwright's own `MODULE.bazel` declares the `@playwright` repo (Playwright 1.49.0) and registers its toolchain. `node` comes from [rules_nodejs](https://github.com/bazel-contrib/rules_nodejs)'s runtime toolchain: rules_nodejs (a BCR module, and a dependency of rules_playwright since v0.3.0) registers its default node for every build, and a `node.toolchain(node_version = ...)` in your root module takes precedence. rules_playwright isn't in the BCR yet, so pin it with `archive_override` or `git_override`. To choose the version, declare it in your root module:
+The `archive_override` is required: the BCR's `rules_playwright` is a
+different project ([below](#name-clash-with-the-bcrs-rules_playwright)).
+
+That's all the wiring: rules_playwright's own `MODULE.bazel` declares the `@playwright` repo (Playwright 1.49.0) and registers its toolchain. `node` comes from [rules_nodejs](https://github.com/bazel-contrib/rules_nodejs)'s runtime toolchain: rules_nodejs (a BCR module, and a dependency of rules_playwright since v0.3.0) registers its default node for every build, and a `node.toolchain(node_version = ...)` in your root module takes precedence. To choose the version, declare it in your root module:
 
 ```python
 playwright = use_extension("@rules_playwright//:extensions.bzl", "playwright")
