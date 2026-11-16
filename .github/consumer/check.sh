@@ -6,7 +6,7 @@
 #   2. the same tag twice in the root resolves
 #   3. an unsupported version fails, naming playwright.version
 #   4. one repo name declared two ways in the root fails clearly
-#   5. tests/ and examples/ are not shipped; @rules_playwright//private/... loads
+#   5. tests/, examples/ and dev/ are not shipped; @rules_playwright//... loads
 #   6. with no node.toolchain() of its own, a consumer's playwright_binary
 #      runs rules_nodejs's default node, from runfiles (not PATH)
 # Usage: .github/consumer/check.sh <scratch dir>
@@ -16,7 +16,7 @@ work="$1"
 src="$work/rules_playwright"
 rm -rf "$work"; mkdir -p "$src"
 git -C "$repo" archive HEAD | tar -x -C "$src"
-for d in tests examples; do
+for d in tests examples dev; do
     if [[ -e "$src/$d" ]]; then echo "FAIL: archive contains $d/" >&2; exit 1; fi
 done
 version="$(grep -A3 '^playwright.version(' "$src/MODULE.bazel" | sed -n 's/^ *version = "\(.*\)",$/\1/p')"
@@ -71,8 +71,8 @@ expect_fail "$c" 'declares repo "playwright" twice, differently'
 echo "PASS: conflicting declarations fail clearly"
 
 # 5. The shipped packages load (the root package loads the dev-only @npm).
-(cd "$work/untagged" && bazel query "@rules_playwright//private/... + @rules_playwright//toolchain/..." >/dev/null)
-echo "PASS: @rules_playwright//private/... and //toolchain/... load"
+(cd "$work/untagged" && bazel query "@rules_playwright//..." >/dev/null)
+echo "PASS: @rules_playwright//... loads"
 
 # 6. node comes from rules_nodejs's default runtime toolchain. With no
 #    @playwright/test in `data`, the launcher gets past node and stops at

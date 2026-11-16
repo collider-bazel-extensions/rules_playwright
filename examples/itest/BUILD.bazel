@@ -38,7 +38,7 @@ playwright_test(
     srcs = ["ui.spec.ts"],
     config = "playwright.config.ts",
     tags = ["manual"],
-    data = ["//:node_modules/@playwright/test"],
+    data = ["//dev:node_modules/@playwright/test"],
 )
 
 # Pass the assigned port through to the test as PORT_app — the config

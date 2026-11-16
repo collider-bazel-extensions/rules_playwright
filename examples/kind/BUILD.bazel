@@ -55,7 +55,7 @@ playwright_test(
     srcs = ["e2e.spec.ts"],
     config = "playwright.config.ts",
     tags = ["manual"],
-    data = ["//:node_modules/@playwright/test"],
+    data = ["//dev:node_modules/@playwright/test"],
 )
 
 service_test(

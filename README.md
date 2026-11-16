@@ -49,7 +49,7 @@ are pinned but **validation is pending** — see
 ### Bzlmod (MODULE.bazel)
 
 ```python
-bazel_dep(name = "rules_playwright", version = "0.3.0")
+bazel_dep(name = "rules_playwright", version = "0.3.1")
 ```
 
 That's all the wiring: rules_playwright's own `MODULE.bazel` declares the `@playwright` repo (Playwright 1.49.0) and registers its toolchain. `node` comes from [rules_nodejs](https://github.com/bazel-contrib/rules_nodejs)'s runtime toolchain: rules_nodejs (a BCR module, and a dependency of rules_playwright since v0.3.0) registers its default node for every build, and a `node.toolchain(node_version = ...)` in your root module takes precedence. rules_playwright isn't in the BCR yet, so pin it with `archive_override` or `git_override`. To choose the version, declare it in your root module:
@@ -62,7 +62,15 @@ use_repo(playwright, "playwright")
 
 Per repo name, the root module's tag wins, otherwise rules_playwright's own; other modules' tags are ignored. A repeated identical tag is harmless; one name declared two different ways, or an unsupported version, fails with a message naming the tag. Through v0.2.0 the root had to declare `playwright.version()`, or resolution failed with `does not generate repository "playwright"`.
 
-The release archive (tag tarball) leaves out `tests/` and `examples/`, which load dev-only modules. The root package still loads the dev-only `@npm` (for this repo's own `//:node_modules`), so `bazel query @rules_playwright//...` fails for consumers; query `@rules_playwright//private/...` or name targets instead.
+The release archive (tag tarball) leaves out `tests/`, `examples/` and `dev/` (this repo's own npm workspace), which load dev-only modules, so `bazel query @rules_playwright//...` works for consumers (since v0.3.1).
+
+### Name clash with the BCR's `rules_playwright`
+
+The BCR has an unrelated module with the same name, [mrmeku/rules_playwright](https://github.com/mrmeku/rules_playwright), with versions 0.2.1 to 0.5.3, 0.3.0 among them. Bzlmod resolves one module per name, so:
+
+- **The `archive_override` / `git_override` in your root module is required.** Without it, `bazel_dep(name = "rules_playwright", version = ...)` resolves from the BCR, to the other project (silently, for a version both publish, such as 0.3.0), and this README's loads fail.
+- **This module and the BCR's can't be in one build.** The root's override applies to every module that depends on `rules_playwright`, so a dependency that expects the BCR's module gets this one. `bazel_dep(..., repo_name = ...)` changes only the apparent repo name, not the module name, so it doesn't help.
+- For the same reason, this module can't be published to the BCR under this name.
 
 To use the host-installed `npx` instead of fetching a hermetic browser bundle
 (faster setup, sacrifices hermeticity):

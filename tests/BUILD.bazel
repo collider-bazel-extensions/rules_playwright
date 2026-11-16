@@ -2,7 +2,7 @@
 also live here — but full runnable compositions are under /examples.
 
 @playwright/test is supplied via aspect_rules_js (see MODULE.bazel + workspace
-package.json + pnpm-lock.yaml). No host `npm install` required.
+dev/package.json + dev/pnpm-lock.yaml). No host `npm install` required.
 """
 
 load("@bazel_skylib//lib:unittest.bzl", "analysistest", "asserts")
@@ -23,14 +23,14 @@ exports_files(["smoke.spec.ts"])
 
 playwright_binary(
     name = "binary",
-    data = ["//:node_modules/@playwright/test"],
+    data = ["//dev:node_modules/@playwright/test"],
     tags = ["manual"],
 )
 
 playwright_server(
     name = "server",
     port = 0,
-    data = ["//:node_modules/@playwright/test"],
+    data = ["//dev:node_modules/@playwright/test"],
     tags = ["manual"],
 )
 
@@ -45,7 +45,7 @@ playwright_test(
     srcs = ["smoke.spec.ts"],
     config = "playwright.config.ts",
     browsers = ["chromium"],
-    data = ["//:node_modules/@playwright/test"],
+    data = ["//dev:node_modules/@playwright/test"],
 )
 
 # Multi-browser smoke. Tagged manual so the default CI cell doesn't run it
@@ -57,7 +57,7 @@ playwright_test(
     srcs = ["smoke.spec.ts"],
     config = "playwright.config.ts",
     browsers = ["chromium", "firefox", "webkit"],
-    data = ["//:node_modules/@playwright/test"],
+    data = ["//dev:node_modules/@playwright/test"],
     tags = ["manual"],
 )
 
@@ -73,7 +73,7 @@ py_test(
     name = "version_drift_test",
     srcs = ["version_drift_test.py"],
     data = [
-        "//:pnpm-lock.yaml",
+        "//dev:pnpm-lock.yaml",
         "//private:versions.bzl",
     ],
 )

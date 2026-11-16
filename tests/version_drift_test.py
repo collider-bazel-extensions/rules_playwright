@@ -23,7 +23,7 @@ def _runfiles_path(rel: str) -> Path:
 
 
 def lock_version() -> str:
-    text = _runfiles_path("pnpm-lock.yaml").read_text()
+    text = _runfiles_path("dev/pnpm-lock.yaml").read_text()
     # Match the importers.<root>.devDependencies['@playwright/test'].specifier
     # field: a `specifier:` line directly under a stanza naming @playwright/test.
     blocks = re.split(r"^      '@playwright/test':\n", text, flags=re.M)

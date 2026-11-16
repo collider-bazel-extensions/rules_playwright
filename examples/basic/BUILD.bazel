@@ -14,5 +14,5 @@ playwright_test(
     # Override the default `requires-network` since this test never touches
     # the network. Default `no-sandbox` and `playwright` tags are preserved.
     tags = ["playwright", "no-sandbox"],
-    data = ["//:node_modules/@playwright/test"],
+    data = ["//dev:node_modules/@playwright/test"],
 )
