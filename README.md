@@ -54,7 +54,7 @@ archive_override(
     module_name = "rules_playwright",
     urls = ["https://github.com/collider-bazel-extensions/rules_playwright/archive/refs/tags/v0.3.2.tar.gz"],
     strip_prefix = "rules_playwright-0.3.2",
-    integrity = "sha256-9ICIltLb+Yg9CK4j3W4GE+daG/WNBZFupajbMX+yThA=",
+    integrity = "sha256-kolgV1j3RhGgjeV8cAaztZpWtmi71JJRX3e326ApJ+o=",
 )
 ```
 
