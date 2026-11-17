@@ -49,11 +49,11 @@ are pinned but **validation is pending** — see
 ### Bzlmod (MODULE.bazel)
 
 ```python
-bazel_dep(name = "rules_playwright", version = "0.3.1")
+bazel_dep(name = "rules_playwright", version = "0.3.2")
 archive_override(
     module_name = "rules_playwright",
-    urls = ["https://github.com/collider-bazel-extensions/rules_playwright/archive/refs/tags/v0.3.1.tar.gz"],
-    strip_prefix = "rules_playwright-0.3.1",
+    urls = ["https://github.com/collider-bazel-extensions/rules_playwright/archive/refs/tags/v0.3.2.tar.gz"],
+    strip_prefix = "rules_playwright-0.3.2",
     integrity = "sha256-9ICIltLb+Yg9CK4j3W4GE+daG/WNBZFupajbMX+yThA=",
 )
 ```
@@ -811,3 +811,7 @@ issue — is enough to flip the macOS row in `DESIGN.md`'s status table from
 Want Bazel rules for another tool or service?
 [Request a rules package](https://github.com/collider-bazel-extensions/.github/issues/new?template=request-a-rules-package.yml).
 The [organization page](https://github.com/collider-bazel-extensions) lists every package.
+
+## License
+
+[Apache License 2.0](LICENSE) (SPDX: `Apache-2.0`).
